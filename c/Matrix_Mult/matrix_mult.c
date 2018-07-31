@@ -17,7 +17,7 @@ int main()
             "Intel mkl function dgemm, where A, B, and C are matrices and \n"
             "alpha and beta are double precision scalars\n\n");
 
-    m = 10000, k = 10000, n = 10000;
+    m = 15000, k = 15000, n = 15000;
 
     printf("Initialize data for matrix multiplication C=A*B for matrix \n"
             "A (%ix%i) and matrix B (%ix%i)\n\n", m, k, k, n);
