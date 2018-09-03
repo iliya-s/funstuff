@@ -1,6 +1,6 @@
 USE_MPI = yes
 USE_INTEL = yes
-BOOST = /home/iliya/apps/boost/boost_1_67_0
+BOOST = /home/iliya/apps/boost/boost_1_68_0
 
 FLAGS = -g -Wall -I${BOOST}
 
@@ -26,7 +26,7 @@ endif
 
 HOSTNAME := $(shell hostname)
 
-SRC_eulers_num = eulers_num.cp stats.cpp
+SRC_eulers_num = eulers_num.cpp stats.cpp
 
 SRC_pi = pi.cpp
 
@@ -46,4 +46,4 @@ pi : $(OBJ_pi)
 	$(CXX) $(FLAGS) $(OPT) -o pi $(OBJ_pi) $(LFLAGS)
 
 clean :
-	find . -name "*.o"|xargs rm 2>/dev/null
+	find . -name "*.o"|xargs rm 2>/dev/null; rm -f eulers_num pi >/dev/null 2>&1

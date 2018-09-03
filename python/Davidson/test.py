@@ -3,7 +3,7 @@ import Davidson as D
 import time
 
 #Build diagonally dominant Hamiltonian and Direct method function of Hamiltonian
-n = 1500
+n = 5000
 H = np.zeros((n,n))
 
 
@@ -13,13 +13,13 @@ for i in r:
 	for j in r[(i+1):]:	#take off diagonal elements to be decreasing in order of magnitude
 		H[i,j] = (10**(i-j+1))
 H = (H.T + H)/2
- 
+
 def A(v):		#make direct method function
 	return np.dot(H,v)
 
 #Davidson
 start_davidson = time.time()
- 
+
 E = D.Davidson(A,np.diag(H),4)
 
 end_davidson = time.time()
