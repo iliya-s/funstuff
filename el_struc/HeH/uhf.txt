@@ -1,0 +1,398 @@
+H_core: 
+-1.73576 -1.43459
+-1.43459 -2.61782
+
+Metric: 
+       1 0.537156
+0.537156        1
+
+Transformation Matrix: 
+-1.03936  0.57033
+ 1.03936  0.57033
+
+ ############### Begin Loop ################ 
+
+ ############### 0 ################ 
+
+HF Electronic Energy: 
+-4.92875
+
+HF Total Energy: 
+-3.56188
+
+Alpha Orbital Energies: 
+-2.61871
+-1.33426
+
+Alpha Orbitals: 
+0.031098 -1.18515
+0.982951 0.662843
+
+Beta Orbital Energies: 
+-2.61871
+-1.33426
+
+Beta Orbitals: 
+0.031098 -1.18515
+0.982951 0.662843
+
+Total Density: 
+  1.05489 -0.543326
+-0.543326   1.77881
+
+Spin Density: 
+ -1.05344  0.589178
+ 0.589178 -0.329521
+
+ ############### 1 ################ 
+
+HF Electronic Energy: 
+-4.64595
+
+HF Total Energy: 
+-3.27908
+
+Alpha Orbital Energies: 
+ -1.39305
+0.0913629
+
+Alpha Orbitals: 
+0.0934543  -1.18187
+ 0.946689  0.713677
+
+Beta Orbital Energies: 
+ -1.46578
+-0.484519
+
+Beta Orbitals: 
+0.171725 -1.17306
+0.897211 0.774963
+
+Total Density: 
+  1.32444 -0.635729
+-0.635729   2.17103
+
+Spin Density: 
+ -1.31098  0.779901
+ 0.779901 -0.464381
+
+ ############### 2 ################ 
+
+HF Electronic Energy: 
+-4.48506
+
+HF Total Energy: 
+-3.11819
+
+Alpha Orbital Energies: 
+ -1.0895
+0.450629
+
+Alpha Orbitals: 
+0.121984 -1.17927
+0.929168 0.736343
+
+Beta Orbital Energies: 
+ -1.19417
+-0.264208
+
+Beta Orbitals: 
+ 0.20822 -1.16713
+0.872609 0.802563
+
+Total Density: 
+  1.39644 -0.640177
+-0.640177   2.24444
+
+Spin Density: 
+ -1.37075  0.846235
+ 0.846235 -0.522746
+
+ ############### 3 ################ 
+
+HF Electronic Energy: 
+-4.44071
+
+HF Total Energy: 
+-3.07384
+
+Alpha Orbital Energies: 
+-1.01427
+0.541103
+
+Alpha Orbitals: 
+ 0.13585 -1.17775
+ 0.92044 0.747224
+
+Beta Orbital Energies: 
+ -1.13187
+-0.207882
+
+Beta Orbitals: 
+0.212009 -1.16645
+0.869999 0.805392
+
+Total Density: 
+  1.41712 -0.632515
+-0.632515   2.25068
+
+Spin Density: 
+ -1.38301  0.871592
+ 0.871592 -0.549444
+
+ ############### 4 ################ 
+
+HF Electronic Energy: 
+-4.42997
+
+HF Total Energy: 
+-3.06311
+
+Alpha Orbital Energies: 
+-0.995624
+ 0.563881
+
+Alpha Orbitals: 
+0.142702 -1.17694
+0.916076 0.752569
+
+Beta Orbital Energies: 
+ -1.11899
+-0.193291
+
+Beta Orbitals: 
+0.209996 -1.16681
+0.871387  0.80389
+
+Total Density: 
+  1.42372 -0.626336
+-0.626336   2.24623
+
+Spin Density: 
+ -1.38465  0.882195
+ 0.882195 -0.562131
+
+ ############### 5 ################ 
+
+HF Electronic Energy: 
+-4.42759
+
+HF Total Energy: 
+-3.06072
+
+Alpha Orbital Energies: 
+-0.991002
+ 0.569615
+
+Alpha Orbitals: 
+0.146105 -1.17652
+0.913896 0.755214
+
+Beta Orbital Energies: 
+-1.11713
+-0.18938
+
+Beta Orbitals: 
+ 0.20801 -1.16717
+0.872754 0.802406
+
+Total Density: 
+  1.42611 -0.622693
+-0.622693   2.24213
+
+Spin Density: 
+ -1.38432  0.886944
+ 0.886944 -0.568294
+
+ ############### 6 ################ 
+
+HF Electronic Energy: 
+-4.42714
+
+HF Total Energy: 
+-3.06027
+
+Alpha Orbital Energies: 
+-0.989856
+ 0.571058
+
+Alpha Orbitals: 
+0.147797 -1.17631
+0.912809 0.756528
+
+Beta Orbital Energies: 
+ -1.11735
+-0.188267
+
+Beta Orbitals: 
+0.206775 -1.16739
+0.873602 0.801482
+
+Total Density: 
+  1.42708 -0.620743
+-0.620743   2.23961
+
+Spin Density: 
+ -1.38386  0.889171
+ 0.889171 -0.571324
+
+ ############### 7 ################ 
+
+HF Electronic Energy: 
+-4.4271
+
+HF Total Energy: 
+-3.06023
+
+Alpha Orbital Energies: 
+-0.989571
+ 0.571421
+
+Alpha Orbitals: 
+0.148638 -1.17621
+0.912268  0.75718
+
+Beta Orbital Energies: 
+ -1.11775
+-0.187921
+
+Beta Orbitals: 
+0.206098 -1.16751
+0.874067 0.800975
+
+Total Density: 
+   1.4275 -0.619739
+-0.619739   2.23824
+
+Spin Density: 
+ -1.38356  0.890243
+ 0.890243 -0.572823
+
+ ############### 8 ################ 
+
+HF Electronic Energy: 
+-4.42712
+
+HF Total Energy: 
+-3.06025
+
+Alpha Orbital Energies: 
+-0.989501
+ 0.571513
+
+Alpha Orbitals: 
+0.149057 -1.17615
+0.911998 0.757505
+
+Beta Orbital Energies: 
+-1.11802
+ -0.1878
+
+Beta Orbitals: 
+0.205745 -1.16757
+0.874309 0.800711
+
+Total Density: 
+  1.42771 -0.619232
+-0.619232   2.23753
+
+Spin Density: 
+ -1.38339  0.890767
+ 0.890767 -0.573566
+
+ ############### 9 ################ 
+
+HF Electronic Energy: 
+-4.42715
+
+HF Total Energy: 
+-3.06028
+
+Alpha Orbital Energies: 
+-0.989484
+ 0.571536
+
+Alpha Orbitals: 
+0.149265 -1.17613
+0.911864 0.757667
+
+Beta Orbital Energies: 
+ -1.11817
+-0.187753
+
+Beta Orbitals: 
+0.205566  -1.1676
+0.874432 0.800577
+
+Total Density: 
+   1.4278 -0.618978
+-0.618978   2.23717
+
+Spin Density: 
+  -1.3833  0.891026
+ 0.891026 -0.573935
+
+ ############### 10 ################ 
+
+HF Electronic Energy: 
+-4.42716
+
+HF Total Energy: 
+-3.06029
+
+Alpha Orbital Energies: 
+-0.989479
+ 0.571542
+
+Alpha Orbitals: 
+0.149369 -1.17611
+0.911797 0.757747
+
+Beta Orbital Energies: 
+ -1.11825
+-0.187733
+
+Beta Orbitals: 
+0.205476 -1.16762
+0.874494 0.800509
+
+Total Density: 
+  1.42785 -0.618851
+-0.618851   2.23699
+
+Spin Density: 
+ -1.38326  0.891154
+ 0.891154 -0.574119
+
+ ############### 11 ################ 
+
+HF Electronic Energy: 
+-4.42717
+
+HF Total Energy: 
+-3.0603
+
+Alpha Orbital Energies: 
+-0.989478
+ 0.571543
+
+Alpha Orbitals: 
+ 0.14942 -1.17611
+0.911764 0.757787
+
+Beta Orbital Energies: 
+  -1.1183
+-0.187724
+
+Beta Orbitals: 
+ 0.20543 -1.16763
+0.874525 0.800475
+
+Total Density: 
+  1.42787 -0.618788
+-0.618788    2.2369
+
+Spin Density: 
+ -1.38324  0.891217
+ 0.891217 -0.574211
+

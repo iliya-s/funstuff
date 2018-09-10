@@ -4,32 +4,31 @@ BOOST = /home/iliya/apps/boost/boost_1_68_0/
 EIGEN = /home/iliya/apps/eigen/eigen-eigen-b3f3d4950030
 
 FLAGS = -g -Wall -I${BOOST} -I${EIGEN}
+LFLAGS = -L${BOOST}/stage/lib -lboost_serialization
 
 ifeq ($(USE_INTEL), yes)
 	ifeq ($(USE_MPI), yes)
 		CXX = mpiicpc
-		LFLAGS = -L${BOOST}/stage/lib -lboost_serialization -lboost_mpi
+		LFLAGS += -lboost_mpi
 	else
 		CXX = icpc
-		LFLAGS = -L${BOOST}/stage/lib -lboost_serialization
 		FLAGS += -DSERIAL
 	endif
 else
 	ifeq ($(USE_MPI), yes)
 		CXX = mpicxx
-		LFLAGS = -L${BOOST}/stage/lib -lboost_serialization -lboost_mpi
+		LFLAGS += -lboost_mpi
 	else
 		CXX = g++
-		LFLAGS = -L${BOOST}/stage/lib -lboost_serialization
 		FLAGS += -DSERIAL
 	endif
 endif
 
 HOSTNAME := $(shell hostname)
 
-SRC_main = main.cpp ao_integrals.cpp
+SRC_main = main.cpp integrals.cpp molecule.cpp
 
-OBJ_main = obj/main.o obj/ao_integrals.o
+OBJ_main = obj/main.o obj/integrals.o obj/molecule.o
 
 obj/%.o: %.cpp
 	$(CXX) $(FLAGS) $(OPT) -c $< -o $@
