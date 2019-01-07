@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 #ifndef SERIAL
     double finalavg;
     boost::mpi::reduce(world, avg, finalavg, std::plus<double> (), 0);
-    finalavg /= world.size();
+    finalavg /= (double) world.size();
     if (world.rank() == 0)
     {
         std::cout << "estimate for e: " << finalavg << std::endl;

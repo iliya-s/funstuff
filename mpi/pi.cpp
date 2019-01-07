@@ -6,7 +6,7 @@
 #include <boost/mpi.hpp>
 #endif
 
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
     std::mt19937 rng;
 #ifndef SERIAL
@@ -25,14 +25,15 @@ int main(int argc, char *argv[])
         double x = dist(rng);
         double y = dist(rng);
         double test = x * x + y * y;
-        if (test <= 1.0) count += 1.0;
+        if (test <= 1.0)
+            count += 1.0;
     }
     double pi = 4.0 * count / (double) niter;
 
 #ifndef SERIAL
     double finalpi;
     boost::mpi::reduce(world, pi, finalpi, std::plus<double> (), 0);
-    finalpi /= world.size();
+    finalpi /= (double) world.size();
     if (world.rank() == 0)
     {
         std::cout << "estimate for pi: " << finalpi << std::endl;
