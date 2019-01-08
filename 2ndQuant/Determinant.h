@@ -53,7 +53,7 @@ class Determinant
 
     //getter and setter
     bool operator()(int orbital, int spin) const;
-    void Set(int orbital, int spin, bool occupancy);
+    void set(int orbital, int spin, bool occupancy);
 
     //Counts occupied orbitals up to but not including specified orbital
     int CountSetOrbsTo(int orbital, int spin) const;

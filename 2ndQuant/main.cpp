@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 
     Determinant c;
     cout << c(3, 0) << endl;
-    c.Set(3, 0, true);
+    c.set(3, 0, true);
     cout << c(4, 0) << endl;
     cout << c << endl;
     cout << endl;

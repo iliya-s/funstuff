@@ -108,7 +108,7 @@ inline bool Determinant::operator()(int orbital, int spin) const
 }
 
 //setter
-inline void Determinant::Set(int orbital, int spin, bool occupancy)
+inline void Determinant::set(int orbital, int spin, bool occupancy)
 {
     long index = orbital / 64, bit = orbital % 64, one = 1;
     if (occupancy)
@@ -163,10 +163,10 @@ void Determinant::HartreeFock()
 {
     for (int i = 0; i < nalpha; i++)
     {
-        Set(i, 0, true);
+        set(i, 0, true);
     }
     for (int i = 0; i < nbeta; i++)
     {
-        Set(i, 1, true);
+        set(i, 1, true);
     }
 }
