@@ -37,7 +37,7 @@ int main(int argc, char **argv)
     Determinant c;
     cout << c(3, 0) << endl;
     c.set(3, 0, true);
-    cout << c(4, 0) << endl;
+    cout << c(3, 0) << endl;
     cout << c << endl;
     cout << endl;
 
@@ -56,5 +56,12 @@ int main(int argc, char **argv)
 
     cout << A.CountSetOrbsTo(3,0) << endl;
     cout << A.Parity(3,0) << endl;
-
+    cout << A.CountSetOrbsTo(7) << endl;
+    cout << A.Parity(7) << endl;
+    cout << endl;
+    A *= 3.0;
+    cout << A << endl << endl;
+    cout << 2.0 * A << endl;
+    cout << A * 2.0 << endl;
+    cout << A * E << endl;
 }
