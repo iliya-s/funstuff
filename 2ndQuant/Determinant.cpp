@@ -13,32 +13,18 @@ void InitDetVars(int spin, int nelec, int norbs)
 //constructor
 Determinant::Determinant()
 {
-    String[0] = new long [len];
-    String[1] = new long [len];
     long zero = 0;
     for (int i = 0; i < len; i++)
     {
-        String[0][i] = zero;
-        String[1][i] = zero;
+        String[0].push_back(zero);
+        String[1].push_back(zero);
     }
 }
 
 Determinant::Determinant(const Determinant &D)
 {
     coef = D.coef;
-    for (int i = 0; i < len; i++)
-    {
-        String[0][i] = D.String[0][i];
-        String[1][i] = D.String[1][i];
-    }
-}
-
-//deconstructor
-Determinant::~Determinant()
-{
-    delete[] String[0];
-    delete[] String[1];
-    delete[] String;
+    String = D.String;
 }
 
 //operators
@@ -46,11 +32,7 @@ Determinant::~Determinant()
 Determinant &Determinant::operator=(const Determinant &RHS)
 {
     coef = RHS.coef;
-    for (int i = 0; i < len; i++)
-    {
-        String[0][i] = RHS.String[0][i];
-        String[1][i] = RHS.String[1][i];
-    }
+    String = RHS.String;
     return *this;
 }
 

@@ -39,13 +39,12 @@ class Determinant
     //member variables
     static int norbs, nalpha, nbeta, len;
     double coef = 1.0;
-    long **String = new long *[2];
+    std::array<std::vector<long>, 2> String;
 
     public:
     //constructors and deconstructor
     Determinant();
     Determinant(const Determinant &D);
-    ~Determinant();
     
     //operators
     //  copy/assignment operator
