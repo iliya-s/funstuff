@@ -13,11 +13,10 @@ void InitDetVars(int spin, int nelec, int norbs)
 //constructor
 Determinant::Determinant()
 {
-    long zero = 0;
     for (int i = 0; i < len; i++)
     {
-        String[0].push_back(zero);
-        String[1].push_back(zero);
+        String[0].push_back(0);
+        String[1].push_back(0);
     }
 }
 
@@ -98,13 +97,13 @@ std::ostream &operator<<(std::ostream &os, const Determinant &D)
     return os;
 }
 
+//bit manipulations for getter and setter from: https://en.wikipedia.org/wiki/Bit_manipulation under Bit manipulation in the C programming language
 //getter
 inline bool Determinant::operator()(int orbital, int spin) const
 {
     long index = orbital / 64;
     long bit = orbital % 64;
-    long one = 1;
-    long test = String[spin][index] & (one << bit);
+    long test = String[spin][index] & (1 << bit);
     if (test == 0)
         return false;
     else
@@ -123,11 +122,10 @@ inline void Determinant::set(int orbital, int spin, bool occupancy)
 {
     long index = orbital / 64;
     long bit = orbital % 64;
-    long one = 1;
     if (occupancy)
-        String[spin][index] |= (one << bit);
+        String[spin][index] |= (1 << bit);
     else
-        String[spin][index] &= ~(one << bit);
+        String[spin][index] &= ~(1 << bit);
 }
 
 inline void Determinant::set(int spin_orbital, bool occupancy)
@@ -142,7 +140,6 @@ int Determinant::CountSetOrbsTo(int orbital, int spin) const
 {
     long index = orbital / 64;
     long bit = orbital % 64;
-    long one = 1;
     int count = 0;
     for (int i = 0; i < index; i++)
     {
@@ -152,13 +149,13 @@ int Determinant::CountSetOrbsTo(int orbital, int spin) const
     long alpha, beta;
     if (spin == 0)  //alpha orbital
     {
-        alpha = (one << bit) - one;
+        alpha = (1 << bit) - 1;
         beta = alpha;
     }
     else    //beta orbital
     {
-        alpha = (one << (bit + 1)) - one;
-        beta = (one << bit) - one;
+        alpha = (1 << (bit + 1)) - 1;
+        beta = (1 << bit) - 1;
     }
     alpha &= String[0][index];
     beta &= String[1][index];
@@ -208,7 +205,7 @@ void Determinant::Read(std::string filename)
     ifs.close();
 }
 
-//hartree fock determinant, sets lowest indexed nalpha(nbeta) electrons to occupied
+//hartree fock determinant, sets lowest indexed nelec electrons to occupied
 void Determinant::HartreeFock()
 {
     int nelec = nalpha + nbeta;
