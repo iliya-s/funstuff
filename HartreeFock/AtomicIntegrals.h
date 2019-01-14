@@ -3,8 +3,8 @@
 #include <iostream>
 #include <algorithm>
 #include <Eigen/Dense>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/archive/binary_iarchive.hpp>
 
 class AOneInt
 {

@@ -77,16 +77,15 @@ void corrFunc(std::vector<double> &c, std::vector<double> &x, std::vector<double
     double var = variance(x,w);
     int n = x.size();
     int l = std::min(n - 1, 1000);
-    double norm;
     c.assign(l, 0.0);
     c[0] = 1.0;
     for (int t = 1; t < l; t++)
     {
-        norm = 0.0;
+        double norm = 0.0;
         for (int i = 0; i < n - t; i++)
         {
-            c[t] += sqrt(w[i] * w[i+t]) * (x[i] - x_bar) * (x[i+t] - x_bar);
-            norm += sqrt(w[i] * w[i+t]);
+            c[t] += std::sqrt(w[i] * w[i + t]) * (x[i] - x_bar) * (x[i + t] - x_bar);
+            norm += std::sqrt(w[i] * w[i + t]);
         }
         c[t] /= norm;
         c[t] /= var;
@@ -141,7 +140,7 @@ void block(std::vector<double> &b_size, std::vector<double> &r_t, std::vector<do
     N = x.size();
     for (int iter = 0; iter < 40; iter++)
     {
-        b_size_tok = pow(2.0, (double) iter);
+        b_size_tok = std::pow(2.0, (double) iter);
         if (b_size_tok > (N / 2))
         {
             break;
@@ -151,7 +150,7 @@ void block(std::vector<double> &b_size, std::vector<double> &r_t, std::vector<do
         r_t.push_back((b_size_tok * b_var) / var);
 
         n_0 = x_0.size();
-        n_1 = floor(n_0 / 2);
+        n_1 = std::floor(n_0 / 2);
         x_1.assign(n_1, 0.0);
         w_1.assign(n_1, 0.0);
         for (int i = 0; i < n_1; i++)
