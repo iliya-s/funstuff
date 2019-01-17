@@ -64,4 +64,7 @@ int main(int argc, char **argv)
     cout << 2.0 * A << endl;
     cout << A * 2.0 << endl;
     cout << A * E << endl;
+
+    cout << endl << sizeof(int) << " " << sizeof(long) << " " << sizeof(double) << " " << sizeof(Determinant) << endl;
+    cout << endl;
 }

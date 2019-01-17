@@ -6,14 +6,7 @@
 #define MAXLONG 0xFFFFFFFFFFFFFFFF //all 64 bits set
 
 //counts number of set bits in integer type
-//  uses SWAR algorithim from: https://www.playingwithpointers.com/blog/swar.html
-inline int CountSetBits(long n)
-{
-    n = n - ((n >> 1) & 0x5555555555555555);
-    n = (n & 0x3333333333333333) + ((n >> 2) & 0x3333333333333333);
-    n = (n + (n >> 4) & 0x0F0F0F0F0F0F0F0F) * 0x0101010101010101;
-    return n >> 56;
-}
+int CountSetBits(long n);
 
 //initialize determinant static variables
 void InitDetVars(int spin, int nelec, int norbs);
@@ -24,14 +17,14 @@ class Determinant
     //boost serialization
     friend class boost::serialization::access;
     template <class Archive>
-        void serialize(Archive &ar, const unsigned int version)
+    void serialize(Archive &ar, const unsigned int version)
+    {
+        ar & coef;
+        for (int i = 0; i < len; i++)
         {
-            ar & coef;
-            for (int i = 0; i < len; i++)
-            {
-                ar & String[0][i] & String[1][i];
-            }
+            ar & String[0][i] & String[1][i];
         }
+    }
 
     //initialize determinant static variables
     friend void InitDetVars(int spin, int nelec, int norbs);
@@ -39,19 +32,22 @@ class Determinant
     //member variables
     static int norbs, nalpha, nbeta, len;
     double coef = 1.0;
-    std::array<std::vector<long>, 2> String;
+    long **String = new long *[2];
 
     public:
     //constructors and deconstructor
     Determinant();
     Determinant(const Determinant &D);
+    ~Determinant();
     
     //operators
     //  copy/assignment operator
     Determinant &operator=(const Determinant &RHS);
-    //  multiplication operator overloaded for <bra|ket>, and const * |ket>
+    //  multiplication operator overloaded for <bra|ket>, and constant * |ket>
     double operator*(const Determinant &RHS) const;
     Determinant &operator*=(double constant);
+    friend Determinant &operator*(Determinant &D, double constant);
+    friend Determinant &operator*(double constant, Determinant &D);
     //  equivalence comparison
     bool operator==(const Determinant &RHS) const;
     //  output stream
@@ -77,6 +73,4 @@ class Determinant
     //hartree fock determinant, sets lowest indexed nelec spin orbitals to occupied
     void HartreeFock();
 };
-Determinant &operator*(Determinant &D, double constant);
-Determinant &operator*(double constant, Determinant &D);
 #endif

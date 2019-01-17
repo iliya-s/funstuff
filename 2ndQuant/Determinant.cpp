@@ -1,6 +1,16 @@
 #include "Determinant.h"
 #include <fstream>
 
+//counts number of set bits in integer type
+//  uses SWAR algorithim from: https://www.playingwithpointers.com/blog/swar.html
+int CountSetBits(long n)
+{
+    n = n - ((n >> 1) & 0x5555555555555555);
+    n = (n & 0x3333333333333333) + ((n >> 2) & 0x3333333333333333);
+    n = (n + (n >> 4) & 0x0F0F0F0F0F0F0F0F) * 0x0101010101010101;
+    return n >> 56;
+}
+
 //initialize static variables
 void InitDetVars(int spin, int nelec, int norbs)
 {
@@ -13,17 +23,29 @@ void InitDetVars(int spin, int nelec, int norbs)
 //constructor
 Determinant::Determinant()
 {
+    String[0] = new long[len];
+    String[1] = new long[len];
     for (int i = 0; i < len; i++)
     {
-        String[0].push_back(0);
-        String[1].push_back(0);
+        String[0][i] = 0;
+        String[1][i] = 0;
     }
+}
+Determinant::~Determinant()
+{
+    delete[] String[0];
+    delete[] String[1];
+    delete[] String;
 }
 
 Determinant::Determinant(const Determinant &D)
 {
     coef = D.coef;
-    String = D.String;
+    for (int i = 0; i < len; i++)
+    {
+        String[0][i] = D.String[0][i];
+        String[1][i] = D.String[1][i];
+    }
 }
 
 //operators
@@ -31,7 +53,11 @@ Determinant::Determinant(const Determinant &D)
 Determinant &Determinant::operator=(const Determinant &RHS)
 {
     coef = RHS.coef;
-    String = RHS.String;
+    for (int i = 0; i < len; i++)
+    {
+        String[0] = RHS.String[0];
+        String[1] = RHS.String[1];
+    }
     return *this;
 }
 
@@ -99,7 +125,7 @@ std::ostream &operator<<(std::ostream &os, const Determinant &D)
 
 //bit manipulations for getter and setter from: https://en.wikipedia.org/wiki/Bit_manipulation under Bit manipulation in the C programming language
 //getter
-inline bool Determinant::operator()(int orbital, int spin) const
+bool Determinant::operator()(int orbital, int spin) const
 {
     long index = orbital / 64;
     long bit = orbital % 64;
@@ -110,7 +136,7 @@ inline bool Determinant::operator()(int orbital, int spin) const
         return true;
 }
 
-inline bool Determinant::operator()(int spin_orbital) const
+bool Determinant::operator()(int spin_orbital) const
 {
     int orbital = spin_orbital / 2;
     int spin = spin_orbital % 2;
@@ -118,7 +144,7 @@ inline bool Determinant::operator()(int spin_orbital) const
 }
 
 //setter
-inline void Determinant::set(int orbital, int spin, bool occupancy)
+void Determinant::set(int orbital, int spin, bool occupancy)
 {
     long index = orbital / 64;
     long bit = orbital % 64;
@@ -128,7 +154,7 @@ inline void Determinant::set(int orbital, int spin, bool occupancy)
         String[spin][index] &= ~(1 << bit);
 }
 
-inline void Determinant::set(int spin_orbital, bool occupancy)
+void Determinant::set(int spin_orbital, bool occupancy)
 {
     int orbital = spin_orbital / 2;
     int spin = spin_orbital % 2;
