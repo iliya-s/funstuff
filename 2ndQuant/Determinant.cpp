@@ -40,7 +40,9 @@ Determinant::~Determinant()
 
 Determinant::Determinant(const Determinant &D)
 {
-    coef = D.coef;
+    Coeff = D.Coeff;
+    String[0] = new long[len];
+    String[1] = new long[len];
     for (int i = 0; i < len; i++)
     {
         String[0][i] = D.String[0][i];
@@ -49,10 +51,10 @@ Determinant::Determinant(const Determinant &D)
 }
 
 //operators
-//  copy/assignment operator
+    //copy/assignment operator
 Determinant &Determinant::operator=(const Determinant &RHS)
 {
-    coef = RHS.coef;
+    Coeff = RHS.Coeff;
     for (int i = 0; i < len; i++)
     {
         String[0] = RHS.String[0];
@@ -61,7 +63,7 @@ Determinant &Determinant::operator=(const Determinant &RHS)
     return *this;
 }
 
-//  multiplication operator overloaded for overlap = <bra|ket>
+    //multiplication operator overloaded for overlap = <bra|ket>
 double Determinant::operator*(const Determinant &RHS) const
 {
     for (int i = 0; i < len; i++)
@@ -69,13 +71,13 @@ double Determinant::operator*(const Determinant &RHS) const
         if (String[0][i] != RHS.String[0][i] || String[1][i] != RHS.String[1][i])
             return 0.0;
     }
-    return coef * RHS.coef;
+    return Coeff * RHS.Coeff;
 }
 
-//  multiplication operator overloaded for constants
+    //multiplication operator overloaded for constants
 Determinant &Determinant::operator*=(double constant)
 {
-    coef *= constant;
+    Coeff *= constant;
     return *this;
 }
 Determinant &operator*(Determinant &D, double constant)
@@ -87,10 +89,10 @@ Determinant &operator*(double constant, Determinant &D)
     return D *= constant;
 }
 
-//  equivalence comparison
+    //equivalence comparison
 bool Determinant::operator==(const Determinant &RHS) const
 {
-    if (coef != RHS.coef)
+    if (Coeff != RHS.Coeff)
         return false;
     for (int i = 0; i < len; i++)
     {
@@ -100,10 +102,10 @@ bool Determinant::operator==(const Determinant &RHS) const
     return true;
 }
 
-//  output stream
+    //output stream
 std::ostream &operator<<(std::ostream &os, const Determinant &D)
 {
-    os << D.coef << " | ";
+    os << D.Coeff << " | ";
     for (int i = 0, norbs = Determinant::norbs; i < norbs; i++)
     {
         bool alpha = D(i, 0);
@@ -161,6 +163,23 @@ void Determinant::set(int spin_orbital, bool occupancy)
     set(orbital, spin, occupancy);
 }
 
+//getter for coefficient
+double Determinant::coeff()
+{
+    return Coeff;
+}
+
+//counts occupied spin orbitals in Determinant
+int Determinant::CountSetOrbs() const
+{
+    int count = 0;
+    for (int i = 0; i < len; i++)
+    {
+        count += CountSetBits(String[0][i]) + CountSetBits(String[1][i]);
+    }
+    return count;
+}
+
 //Counts occupied spin orbitals up to but not including specified orbital
 int Determinant::CountSetOrbsTo(int orbital, int spin) const
 {
@@ -169,8 +188,7 @@ int Determinant::CountSetOrbsTo(int orbital, int spin) const
     int count = 0;
     for (int i = 0; i < index; i++)
     {
-        count += CountSetBits(String[0][i]);
-        count += CountSetBits(String[1][i]);
+        count += CountSetBits(String[0][i]) + CountSetBits(String[1][i]);
     }
     long alpha, beta;
     if (spin == 0)  //alpha orbital
@@ -197,7 +215,7 @@ int Determinant::CountSetOrbsTo(int spin_orbital) const
 }
 
 //parity
-double Determinant::Parity(int orbital, int spin) const
+double Determinant::parity(int orbital, int spin) const
 {
     int count = CountSetOrbsTo(orbital, spin);
     if (count % 2 == 0)
@@ -206,7 +224,7 @@ double Determinant::Parity(int orbital, int spin) const
         return -1.0;
 }
 
-double Determinant::Parity(int spin_orbital) const
+double Determinant::parity(int spin_orbital) const
 {
     int count = CountSetOrbsTo(spin_orbital);
     if (count % 2 == 0)
@@ -216,14 +234,14 @@ double Determinant::Parity(int spin_orbital) const
 }
 
 //write and read
-void Determinant::Write(std::string filename)
+void Determinant::write(std::string filename)
 {
     std::ofstream ofs(filename, std::ios::binary);
     boost::archive::binary_oarchive save(ofs);
     save << *this;
     ofs.close();
 }
-void Determinant::Read(std::string filename)
+void Determinant::read(std::string filename)
 {
     std::ifstream ifs(filename, std::ios::binary);
     boost::archive::binary_iarchive load(ifs);
@@ -234,9 +252,32 @@ void Determinant::Read(std::string filename)
 //hartree fock determinant, sets lowest indexed nelec electrons to occupied
 void Determinant::HartreeFock()
 {
+    vacuum();
     int nelec = nalpha + nbeta;
     for (int i = 0; i < nelec; i++)
     {
         set(i, true);
+    }
+}
+
+//Vacuum vector, sets all orbitals to unoccupied and the coefficient to 1.0
+void Determinant::vacuum()
+{
+    Coeff = 1.0;
+    for (int i = 0; i < len; i++)
+    {
+        String[0][i] = 0;
+        String[1][i] = 0;
+    }
+}
+
+//zero, sets all orbitals to unoccupied and sets coefficient to 0.0
+void Determinant::zero()
+{
+    Coeff = 0.0;
+    for (int i = 0; i < len; i++)
+    {
+        String[0][i] = 0;
+        String[1][i] = 0;
     }
 }

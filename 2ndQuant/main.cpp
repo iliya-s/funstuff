@@ -1,8 +1,8 @@
 #include <iostream>
-#include <fstream>
 #include "Determinant.h"
-
-#include <bitset>
+#include "FundamentalOperators.h"
+#include "NumberOperators.h"
+#include "ExcitationOperators.h"
 
 #ifndef SERIAL
 #include <boost/mpi.hpp>
@@ -22,18 +22,8 @@ int main(int argc, char **argv)
     boost::mpi::environment env(argc, argv);
     boost::mpi::communicator world;
 #endif
-    int a = 50;
-    std::cout << std::bitset<64>(a) << std::endl;
-    std::cout << CountSetBits(a) << std::endl;
-    std::cout << std::bitset<64>(MAXLONG) << std::endl;
-    std::cout << CountSetBits(MAXLONG) << std::endl;
-    cout << endl;
 
-    long one = 1;
-    long test = one << 3;
-    cout << bitset<64>(test) << endl;
-    cout << bitset<64>(test - one) << endl;
-
+    cout << "Determinant" << endl;
     Determinant c;
     cout << c(3, 0) << endl;
     c.set(3, 0, true);
@@ -41,30 +31,49 @@ int main(int argc, char **argv)
     cout << c << endl;
     cout << endl;
 
-    Determinant D, E;
+    Determinant D, M;
     cout << D << endl;
     D.HartreeFock();
-    E = D;
-    cout << (E * D) << " " << (E == D) << endl;
+    M = D;
+    cout << (M * D) << " " << (M == D) << endl;
     cout << endl;
 
-    D.Write("hi");
+    D.write("hi");
     Determinant A;
-    A.Read("hi");
+    A.read("hi");
     cout << A << endl;
     cout << endl;
 
     cout << A.CountSetOrbsTo(3,0) << endl;
-    cout << A.Parity(3,0) << endl;
+    cout << A.parity(3,0) << endl;
     cout << A.CountSetOrbsTo(7) << endl;
-    cout << A.Parity(7) << endl;
+    cout << A.parity(7) << endl;
     cout << endl;
     A *= 3.0;
     cout << A << endl << endl;
     cout << 2.0 * A << endl;
     cout << A * 2.0 << endl;
-    cout << A * E << endl;
+    cout << A * M << endl;
+    cout << endl << endl;
 
-    cout << endl << sizeof(int) << " " << sizeof(long) << " " << sizeof(double) << " " << sizeof(Determinant) << endl;
-    cout << endl;
+    cout << "LadderOperators" << endl;
+    cout << D << endl;
+    Operator::Annihilation a;
+    Operator::Creation a_dag;
+    cout << a(1) * D << endl;
+    cout << a_dag(14) * D << endl;
+
+    cout << "NumberOperators" << endl;
+    Operator::OccupationNumber n;
+    Operator::ParticleNumber N;
+    cout << n(2) * D << endl;
+    cout << N * D << endl;
+
+    cout << "ExcitationOperators" << endl;
+    Operator::Excitation E(10, 8);
+    D.HartreeFock();
+    cout << D << endl;
+    Determinant L = E * D;
+    cout << L << endl;
+    cout << E.adjoint() * L << endl;
 }
