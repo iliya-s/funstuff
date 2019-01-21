@@ -22,11 +22,11 @@ class AOneInt
 
     inline double operator() (int i, int j) const
     {
-        return store[i * norbs + j];
+        return store.at(i * norbs + j);
     }
     inline double &operator() (int i, int j)
     {
-        return store[i * norbs + j];
+        return store.at(i * norbs + j);
     }
 };
 

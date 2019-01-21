@@ -40,15 +40,15 @@ void CanonicalTransform(const Eigen::MatrixXd &S, Eigen::MatrixXd &X)
 
 RHF::RHF(Molecule &mol)
 {
-    Run(mol);
+    run(mol);
 }
 
-int RHF::Run(Molecule &mol)
+void RHF::run(Molecule &mol)
 {
     if (!(mol.built))
     {
         std::cout << "Build molecule before running hartree fock" << std::endl;
-        return 1;
+        return;
     }
 
     //variables
@@ -131,6 +131,7 @@ int RHF::Run(Molecule &mol)
 
 
         //calculate HF energy
+        /*
         E = 0.0;
         for (int i = 0; i < norbs; i++)
         {
@@ -139,6 +140,8 @@ int RHF::Run(Molecule &mol)
                 E += 0.5 * density(i, j) * (h(i, j) + fock(i, j));
             }
         }
+        */
+        E = 0.5 * (density.array() * (h.array() + fock.array())).sum();
         std::cout << "HF Electronic Energy" << std::endl;
         std::cout << E << std::endl << std::endl;
         E += nuc_e;
@@ -151,22 +154,22 @@ int RHF::Run(Molecule &mol)
         }
         Eold = E;
     }
-    return 0;
-} //Run RHF
+    return;
+} //run RHF
 
 
 
 UHF::UHF(Molecule &mol)
 {
-    Run(mol);
+    run(mol);
 }
 
-int UHF::Run(Molecule &mol)
+void UHF::run(Molecule &mol)
 {
     if (!(mol.built))
     {
         std::cout << "Build molecule before running hartree fock" << std::endl;
-        return 1;
+        return;
     }
 
     //variables
@@ -276,6 +279,7 @@ int UHF::Run(Molecule &mol)
 
 
         //calculate HF energy
+        /*
         E = 0.0;
         for (int a = 0; a < norbs; a++)
         {
@@ -284,6 +288,8 @@ int UHF::Run(Molecule &mol)
                 E += 0.5 * (total_d(a, b) * h(a, b) + d[0](a, b) * fock[0](a, b) + d[1](a, b) * fock[1](a, b));
             }
         }
+        */
+        E = 0.5 * (total_d.array() * h.array() + d[0].array() * fock[0].array() + d[1].array() * fock[1].array()).sum();
         std::cout << "HF Electronic Energy" << std::endl;
         std::cout << E << std::endl << std::endl;
         E += nuc_e;
@@ -296,5 +302,5 @@ int UHF::Run(Molecule &mol)
         }
         Eold = E;
     }
-    return 0;
-} //Run UHF
+    return;
+} //run UHF

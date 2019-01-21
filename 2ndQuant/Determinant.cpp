@@ -1,16 +1,6 @@
 #include "Determinant.h"
 #include <fstream>
 
-//counts number of set bits in integer type
-//  uses SWAR algorithim from: https://www.playingwithpointers.com/blog/swar.html
-int CountSetBits(long n)
-{
-    n = n - ((n >> 1) & 0x5555555555555555);
-    n = (n & 0x3333333333333333) + ((n >> 2) & 0x3333333333333333);
-    n = (n + (n >> 4) & 0x0F0F0F0F0F0F0F0F) * 0x0101010101010101;
-    return n >> 56;
-}
-
 //initialize static variables
 void InitDetVars(int spin, int nelec, int norbs)
 {
@@ -20,21 +10,18 @@ void InitDetVars(int spin, int nelec, int norbs)
     Determinant::nbeta = nelec - Determinant::nalpha;
 }
 
-//constructor
+//constructors and deconstructor
 Determinant::Determinant()
 {
     String[0] = new long[len];
     String[1] = new long[len];
-    for (int i = 0; i < len; i++)
-    {
-        String[0][i] = 0;
-        String[1][i] = 0;
-    }
+    this->vacuum();
 }
+
 Determinant::~Determinant()
 {
-    delete[] String[0];
     delete[] String[1];
+    delete[] String[0];
     delete[] String;
 }
 
@@ -52,13 +39,13 @@ Determinant::Determinant(const Determinant &D)
 
 //operators
     //copy/assignment operator
-Determinant &Determinant::operator=(const Determinant &RHS)
+Determinant &Determinant::operator=(Determinant RHS)
 {
     Coeff = RHS.Coeff;
     for (int i = 0; i < len; i++)
     {
-        String[0] = RHS.String[0];
-        String[1] = RHS.String[1];
+        String[0][i] = RHS.String[0][i];
+        String[1][i] = RHS.String[1][i];
     }
     return *this;
 }
@@ -74,19 +61,33 @@ double Determinant::operator*(const Determinant &RHS) const
     return Coeff * RHS.Coeff;
 }
 
-    //multiplication operator overloaded for constants
+    //multiplication operator overloaded for constants, constant * |ket>, |ket> * constant
 Determinant &Determinant::operator*=(double constant)
 {
     Coeff *= constant;
     return *this;
 }
-Determinant &operator*(Determinant &D, double constant)
+Determinant operator*(const Determinant &D, double constant)
 {
-    return D *= constant;
+    Determinant Dcopy(D);
+    return Dcopy *= constant;
 }
-Determinant &operator*(double constant, Determinant &D)
+Determinant operator*(double constant, const Determinant &D)
 {
-    return D *= constant;
+    Determinant Dcopy(D);
+    return Dcopy *= constant;
+}
+
+    //division operator overloaded for a constant on the right, Determinant / constant
+Determinant &Determinant::operator/=(double constant)
+{
+    Coeff /= constant;
+    return *this;
+}
+Determinant operator/(const Determinant &D, double constant)
+{
+    Determinant Dcopy(D);
+    return Dcopy /= constant;
 }
 
     //equivalence comparison
@@ -125,8 +126,8 @@ std::ostream &operator<<(std::ostream &os, const Determinant &D)
     return os;
 }
 
-//bit manipulations for getter and setter from: https://en.wikipedia.org/wiki/Bit_manipulation under Bit manipulation in the C programming language
-//getter
+//bit manipulations for spin orbital getter and setter from: https://en.wikipedia.org/wiki/Bit_manipulation under Bit manipulation in the C programming language
+//spin orbital getter
 bool Determinant::operator()(int orbital, int spin) const
 {
     long index = orbital / 64;
@@ -145,7 +146,7 @@ bool Determinant::operator()(int spin_orbital) const
     return (*this)(orbital, spin);
 }
 
-//setter
+//spin orbital setter
 void Determinant::set(int orbital, int spin, bool occupancy)
 {
     long index = orbital / 64;
@@ -163,10 +164,14 @@ void Determinant::set(int spin_orbital, bool occupancy)
     set(orbital, spin, occupancy);
 }
 
-//getter for coefficient
+//coefficient getter and setter
 double Determinant::coeff()
 {
     return Coeff;
+}
+void Determinant::coeff(double coefficient)
+{
+    Coeff = coefficient;
 }
 
 //counts occupied spin orbitals in Determinant

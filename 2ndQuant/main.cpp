@@ -3,6 +3,9 @@
 #include "FundamentalOperators.h"
 #include "NumberOperators.h"
 #include "ExcitationOperators.h"
+#include "Hamiltonian.h"
+
+#include <bitset>
 
 #ifndef SERIAL
 #include <boost/mpi.hpp>
@@ -15,13 +18,25 @@ int Determinant::nalpha;
 int Determinant::norbs;
 int Determinant::len;
 
-int main(int argc, char **argv)
+
+
+//int main(int argc, char **argv)
+int main(void)
 {
     InitDetVars(0, 10, 10);
 #ifndef SERIAL
     boost::mpi::environment env(argc, argv);
     boost::mpi::communicator world;
 #endif
+    long r = 2;
+    cout << bitset<64>(r) << endl;
+    cout << bitset<64>(-r) << endl;
+    long f = 194982;
+    cout << bitset<64>(f) << endl;
+    cout << bitset<64>(-f) << endl;
+    cout << bitset<64>(f & -f) << endl;
+    cout << bitset<64>(f ^ (f & -f)) << endl;
+    cout << __builtin_ctzl(f) << endl;
 
     cout << "Determinant" << endl;
     Determinant c;
@@ -51,7 +66,7 @@ int main(int argc, char **argv)
     cout << endl;
     A *= 3.0;
     cout << A << endl << endl;
-    cout << 2.0 * A << endl;
+    cout << A / 2 << endl;
     cout << A * 2.0 << endl;
     cout << A * M << endl;
     cout << endl << endl;
@@ -70,10 +85,21 @@ int main(int argc, char **argv)
     cout << N * D << endl;
 
     cout << "ExcitationOperators" << endl;
-    Operator::Excitation E(10, 8);
+    Operator::Excitation E;
+    cout << "Single Excitation" << endl;
     D.HartreeFock();
-    cout << D << endl;
-    Determinant L = E * D;
-    cout << L << endl;
-    cout << E.adjoint() * L << endl;
+    Determinant L = E(11, 8) * D;
+    cout << "D " <<  D << endl;
+    cout << "L " <<  L << endl;
+    int i, j, o, p;
+    DiffOrbIndices(D, L, i, j);
+    cout << i << " " << j << endl;
+    cout << "Double Excitation" << endl;
+    L = E(15, 6) * L;
+    cout << "D " <<  D << endl;
+    cout << "L " <<  L << endl;
+    DiffOrbIndices(D, L, i, j, o, p);
+    cout << i << " " << j << " " << o << " " << p << endl;
+
+
 }

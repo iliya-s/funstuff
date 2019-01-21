@@ -18,9 +18,13 @@ int main(int argc, char **argv)
     string metric = "metric";
     string nuc = "e_nuc";
 
-    Molecule mol(AOintegrals, metric, nuc);
+    //Molecule mol(AOintegrals, metric, nuc);
+    Molecule mol;
+    mol.build(AOintegrals, metric, nuc);
     
-    RHF R(mol);
+    //RHF R(mol);
+    RHF R;
+    R.run(mol);
 
     //UHF U(mol);
 }

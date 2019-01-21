@@ -41,7 +41,7 @@ class Molecule
     ATwoInt AI2;
 
     //member functions
-    int Build(std::string AOfcidump, std::string metric_file, std::string nuc_file)
+    int build(std::string AOfcidump, std::string metric_file, std::string nuc_file)
     {
         built = true;
         return ReadAOIntegrals(AOfcidump, metric_file, nuc_file, AI1, AI2, S, core_e, nuc_e, norbs, nelec, nalpha, nbeta, sz, irrep);
@@ -51,7 +51,7 @@ class Molecule
     Molecule() {}
     Molecule(std::string AOfcidump, std::string metric_file, std::string nuc_file)
     {
-        Build(AOfcidump, metric_file, nuc_file);
+        build(AOfcidump, metric_file, nuc_file);
     }
 }; //Molecule
 #endif

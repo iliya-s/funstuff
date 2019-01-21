@@ -5,6 +5,16 @@
 
 #define MAXLONG 0xFFFFFFFFFFFFFFFF //all 64 bits set
 
+//counts number of set bits in integer type
+//  uses SWAR algorithim from: https://www.playingwithpointers.com/blog/swar.html
+inline int CountSetBits(long n)
+{
+    n = n - ((n >> 1) & 0x5555555555555555);
+    n = (n & 0x3333333333333333) + ((n >> 2) & 0x3333333333333333);
+    n = (n + (n >> 4) & 0x0F0F0F0F0F0F0F0F) * 0x0101010101010101;
+    return n >> 56;
+}
+
 //initialize determinant static variables
 void InitDetVars(int spin, int nelec, int norbs);
 
@@ -39,24 +49,28 @@ class Determinant
     
     //operators
         //copy/assignment operator
-    Determinant &operator=(const Determinant &RHS);
-        //multiplication operator overloaded for <bra|ket>, and constant * |ket>
+    Determinant &operator=(Determinant RHS);
+        //multiplication operator overloaded for <bra|ket>, constant * |ket>, |ket> * constant
     double operator*(const Determinant &RHS) const;
     Determinant &operator*=(double constant);
-    friend Determinant &operator*(Determinant &D, double constant);
-    friend Determinant &operator*(double constant, Determinant &D);
+    friend Determinant operator*(const Determinant &D, double constant);
+    friend Determinant operator*(double constant, const Determinant &D);
+        //division operator overloaded for Determinant / constant
+    Determinant &operator/=(double constant);
+    friend Determinant operator/(const Determinant &D, double constant);
         //equivalence comparison
     bool operator==(const Determinant &RHS) const;
         //output stream
     friend std::ostream &operator<<(std::ostream &os, const Determinant &D);
 
-    //getter and setter
+    //spin orbital getter and setter
     bool operator()(int orbital, int spin) const;
     bool operator()(int spin_orbital) const;
     void set(int orbital, int spin, bool occupancy);
     void set(int spin_orbital, bool occupancy);
-        //getter for coefficient
+    //coefficient getter and setter;
     double coeff();
+    void coeff(double coefficient);
 
     //counts occupied spin orbitals in Determinant
     int CountSetOrbs() const;
@@ -75,7 +89,12 @@ class Determinant
     void HartreeFock();
     //vacuum vector, sets all orbitals to unoccupied and the coefficient to 1.0
     void vacuum();
-    //zero, sets all orbitals to occupied and sets coefficient to 0.0
+    //zero, sets all orbitals to unoccupied and sets coefficient to 0.0
     void zero();
+
+    //friend functions for hamiltonian overlap
+    friend int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS);
+    friend void DiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a);
+    friend void DiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b);
 };
 #endif

@@ -34,7 +34,7 @@ class RHF
     RHF(Molecule &mol);
 
     //member functions
-    int Run(Molecule &mol);
+    void run(Molecule &mol);
 }; //RHF
 
 class UHF
@@ -61,6 +61,6 @@ class UHF
     UHF(Molecule &mol);
 
     //member functions
-    int Run(Molecule &mol);
+    void run(Molecule &mol);
 }; //UHF
 #endif
