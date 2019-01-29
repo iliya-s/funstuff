@@ -1,6 +1,5 @@
-#include "AtomicIntegrals.h"
 #include "Molecule.h"
-#include "HF.h"
+#include "HartreeFock.h"
 
 #ifndef SERIAL
 #include <boost/mpi.hpp>
@@ -14,17 +13,12 @@ int main(int argc, char **argv)
     boost::mpi::environment env(argc, argv);
     boost::mpi::communicator world;
 #endif
-    string AOintegrals = "AOfcidump";
-    string metric = "metric";
-    string nuc = "e_nuc";
+    string AOFCIDUMP = "AOFCIDUMP";
+    string METRIC = "METRIC";
 
-    //Molecule mol(AOintegrals, metric, nuc);
     Molecule mol;
-    mol.build(AOintegrals, metric, nuc);
+    mol.build(AOFCIDUMP, METRIC);
     
-    //RHF R(mol);
-    RHF R;
+    HartreeFock::Restricted R;
     R.run(mol);
-
-    //UHF U(mol);
 }

@@ -92,13 +92,13 @@ int main(void)
     cout << "D " <<  D << endl;
     cout << "L " <<  L << endl;
     int i, j, o, p;
-    DiffOrbIndices(D, L, i, j);
+    OneDiffOrbIndices(D, L, i, j);
     cout << i << " " << j << endl;
     cout << "Double Excitation" << endl;
     L = E(15, 6) * L;
     cout << "D " <<  D << endl;
     cout << "L " <<  L << endl;
-    DiffOrbIndices(D, L, i, j, o, p);
+    TwoDiffOrbIndices(D, L, i, j, o, p);
     cout << i << " " << j << " " << o << " " << p << endl;
 
 

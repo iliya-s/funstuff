@@ -26,9 +26,9 @@ endif
 
 HOSTNAME := $(shell hostname)
 
-SRC_main = main.cpp AtomicIntegrals.cpp HF.cpp
+SRC_main = main.cpp Integrals.cpp HartreeFock.cpp
 
-OBJ_main = obj/main.o obj/AtomicIntegrals.o obj/HF.o
+OBJ_main = obj/main.o obj/Integrals.o obj/HartreeFock.o
 
 obj/%.o: %.cpp
 	$(CXX) $(FLAGS) $(OPT) -c $< -o $@

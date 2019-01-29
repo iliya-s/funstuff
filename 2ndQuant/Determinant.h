@@ -94,7 +94,8 @@ class Determinant
 
     //friend functions for hamiltonian overlap
     friend int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS);
-    friend void DiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a);
+    friend void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a);
+    friend void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b);
     friend void DiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b);
 };
 #endif

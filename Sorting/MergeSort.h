@@ -1,5 +1,5 @@
-#ifndef MERGE_SORT_HEADER
-#define MERGE_SORT_HEADER
+#ifndef MERGE_SORT_HEADER_H
+#define MERGE_SORT_HEADER_H
 #include <vector>
 
 template<typename T>
@@ -36,7 +36,9 @@ template<typename T>
 void MergeSort(std::vector<T> &V)
 {
     if (V.size() == 1)
+    {
         return;
+    }
     else 
     {
         int mid = V.size() / 2;

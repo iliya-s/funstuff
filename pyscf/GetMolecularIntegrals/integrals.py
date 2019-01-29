@@ -6,8 +6,8 @@ UHF = False
 
 #build molecule
 mol = gto.Mole()
-#mol.atom = "H 0 0 0; H 0 0 1.4"
-mol.atom = 'O 0 0 0; C 0 0 2.132'
+mol.atom = "H 0 0 0; H 0 0 1.4"
+#mol.atom = 'O 0 0 0; C 0 0 2.132'
 #mol.basis = 'sto-3g'
 mol.basis = 'sto-6g'
 #mol.basis = 'ccpvdz'

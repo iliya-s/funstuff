@@ -1,5 +1,5 @@
-#ifndef INSERTION_SORT_HEADER
-#define INSERTION_SORT_HEADER
+#ifndef INSERTION_SORT_HEADER_H
+#define INSERTION_SORT_HEADER_H
 #include <vector>
 
 template<typename T>
