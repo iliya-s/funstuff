@@ -69,6 +69,7 @@ int main(void)
     cout << A / 2 << endl;
     cout << A * 2.0 << endl;
     cout << A * M << endl;
+    cout << A * A << endl;
     cout << endl << endl;
 
     cout << "LadderOperators" << endl;
@@ -76,7 +77,7 @@ int main(void)
     Operator::Annihilation a;
     Operator::Creation a_dag;
     cout << a(1) * D << endl;
-    cout << a_dag(14) * D << endl;
+    cout << a_dag(14) * (a(1) * D) << endl;
 
     cout << "NumberOperators" << endl;
     Operator::OccupationNumber n;

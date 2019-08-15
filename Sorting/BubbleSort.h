@@ -1,5 +1,5 @@
-#ifndef BUBBLE_SORT_HEADER_H
-#define BUBBLE_SORT_HEADER_H
+#ifndef BUBBLESORT_HEADER_H
+#define BUBBLESORT_HEADER_H
 #include <vector>
 
 template<typename T>
@@ -8,18 +8,12 @@ void BubbleSort(std::vector<T> &V)
     while(true)
     {
         int swaps = 0;
-        for (int i = 0; i < (V.size() - 1); i++)
+        for (int i = 0; i < V.size() - 1; i++)
         {
-            if (V[i + 1] < V[i])
+            if (V.at(i + 1) < V.at(i))
             {
-                T buffer = V[i];
-                V[i] = V[i + 1];
-                V[i + 1] = buffer;
+                std::swap(V.at(i), V.at(i + 1));
                 swaps++;
-            }
-            else
-            {
-                continue;
             }
         }
         if (swaps == 0)

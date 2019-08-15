@@ -18,13 +18,6 @@ Determinant::Determinant()
     this->vacuum();
 }
 
-Determinant::~Determinant()
-{
-    delete[] String[1];
-    delete[] String[0];
-    delete[] String;
-}
-
 Determinant::Determinant(const Determinant &D)
 {
     Coeff = D.Coeff;
@@ -35,6 +28,13 @@ Determinant::Determinant(const Determinant &D)
         String[0][i] = D.String[0][i];
         String[1][i] = D.String[1][i];
     }
+}
+
+Determinant::~Determinant()
+{
+    delete[] String[1];
+    delete[] String[0];
+    delete[] String;
 }
 
 //operators
@@ -67,15 +67,13 @@ Determinant &Determinant::operator*=(double constant)
     Coeff *= constant;
     return *this;
 }
-Determinant operator*(const Determinant &D, double constant)
+Determinant operator*(Determinant D, double constant)
 {
-    Determinant Dcopy(D);
-    return Dcopy *= constant;
+    return D *= constant;
 }
-Determinant operator*(double constant, const Determinant &D)
+Determinant operator*(double constant, Determinant D)
 {
-    Determinant Dcopy(D);
-    return Dcopy *= constant;
+    return D *= constant;
 }
 
     //division operator overloaded for a constant on the right, Determinant / constant
@@ -84,10 +82,9 @@ Determinant &Determinant::operator/=(double constant)
     Coeff /= constant;
     return *this;
 }
-Determinant operator/(const Determinant &D, double constant)
+Determinant operator/(Determinant D, double constant)
 {
-    Determinant Dcopy(D);
-    return Dcopy /= constant;
+    return D /= constant;
 }
 
     //equivalence comparison
