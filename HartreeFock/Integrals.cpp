@@ -80,7 +80,7 @@ void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoEl
         std::exit(2);
     }
 
-    nalpha = nelec / 2 + sz;
+    nalpha = (nelec + sz) / 2;
     nbeta = nelec - nalpha;
     irrep.resize(norbs);
 
