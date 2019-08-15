@@ -24,19 +24,18 @@ namespace Operator
     }
     
         //application onto Determinant from left and right
-    Determinant operator*(const Creation &a_dag, const Determinant &D)
+    Determinant operator*(const Creation &a_dag, Determinant D)
     {
-        Determinant Dcopy(D);
-        if (Dcopy(a_dag.index))    //if spin orbital is occupied in D -> return 0
-            Dcopy.zero();
+        if (D(a_dag.index))    //if spin orbital is occupied in D -> return 0
+            D.zero();
         else    //if spin orbital is unocuupied in D -> return D with spin orbital occupied and parity multiplied to coefficient
         {
-            Dcopy *= Dcopy.parity(a_dag.index);
-            Dcopy.set(a_dag.index, true);
+            D *= D.parity(a_dag.index);
+            D.set(a_dag.index, true);
         }
-        return Dcopy;
+        return D;
     } 
-    Determinant operator*(const Determinant &D, const Creation &a_dag)   //multiplcation on the right by a Creation Operator is quivalent to multiplication on the left by an Annihilation Operator
+    Determinant operator*(Determinant D, const Creation &a_dag)   //multiplcation on the right by a Creation Operator is quivalent to multiplication on the left by an Annihilation Operator
     {
         Annihilation a(a_dag);
         return a * D;
@@ -64,20 +63,19 @@ namespace Operator
     }
     
         //application onto Determinant from left and right
-    Determinant operator*(const Annihilation &a, const Determinant &D)
+    Determinant operator*(const Annihilation &a, Determinant D)
     {
-        Determinant Dcopy(D);
-        if (Dcopy(a.index)) //if spin orbital is occupied in D -> return D with spin orbital unoccupied and parity mutliplied to coefficient
+        if (D(a.index)) //if spin orbital is occupied in D -> return D with spin orbital unoccupied and parity mutliplied to coefficient
         {
-            Dcopy *= Dcopy.parity(a.index);
-            Dcopy.set(a.index, false);
+            D *= D.parity(a.index);
+            D.set(a.index, false);
         }
         else    //if spin orbital is unoccupied in D -> return 0
-            Dcopy.zero();
-        return Dcopy;
+            D.zero();
+        return D;
     }
 
-    Determinant operator*(const Determinant &D, const Annihilation &a)   //multiplcation on the right by an Annihilation Operator is quivalent to multiplication on the left by a Creation Operator
+    Determinant operator*(Determinant D, const Annihilation &a)   //multiplcation on the right by an Annihilation Operator is quivalent to multiplication on the left by a Creation Operator
     {
         Creation a_dag(a);
         return a_dag * D;

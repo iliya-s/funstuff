@@ -37,7 +37,7 @@ void CanonicalTransform(const Eigen::MatrixXd &S, Eigen::MatrixXd &X)
         {
             int index = cols[m];
             double eigval = es.eigenvalues()(index);
-            X.col(m) = es.eigenvectors().col(index) * std::pow(eigval, -0.5);
+            X.col(m) = es.eigenvectors().col(index) / std::sqrt(eigval);
         }
     }
 }
@@ -128,6 +128,9 @@ namespace HartreeFock
             Eigen::MatrixXd MOdensity = orbitals.adjoint() * density * orbitals;
             std::cout << MOdensity << std::endl << std::endl;
             */
+            std::cout << "Population Matrix" << std::endl;
+            Eigen::MatrixXd N = density * s;;
+            std::cout << N << std::endl << std::endl;
     
     
             //calculate HF energy

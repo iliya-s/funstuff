@@ -30,14 +30,13 @@ namespace Operator
         }
 
         //application onto Determinant from left and right
-        friend Determinant operator*(const OccupationNumber &n, const Determinant &D)
+        friend Determinant operator*(const OccupationNumber &n, Determinant D)
         {
-            Determinant Dcopy(D);
-            if (!Dcopy(n.index)) //if index is not occupied -> return 0
-                Dcopy.zero();
-            return Dcopy;   //if index is occupied -> return Determinant "multiplied by 1.0"
+            if (!D(n.index)) //if index is not occupied -> return 0
+                D.zero();
+            return D;   //if index is occupied -> return Determinant "multiplied by 1.0"
         }
-        friend Determinant operator*(const Determinant &D, const OccupationNumber &n)
+        friend Determinant operator*(Determinant D, const OccupationNumber &n)
         {
             return n * D;
         }
@@ -49,12 +48,12 @@ namespace Operator
     {
         public:
         //application onto Determinant from left and right
-        friend Determinant operator*(const ParticleNumber &N, const Determinant &D)
+        friend Determinant operator*(const ParticleNumber &N, Determinant D)
         {
             int count = D.CountSetOrbs();
             return count * D;
         }
-        friend Determinant operator*(const Determinant &D, const ParticleNumber &N)
+        friend Determinant operator*(Determinant D, const ParticleNumber &N)
         {
             return N * D;
         }

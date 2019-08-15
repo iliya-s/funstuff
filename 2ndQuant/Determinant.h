@@ -53,11 +53,11 @@ class Determinant
         //multiplication operator overloaded for <bra|ket>, constant * |ket>, |ket> * constant
     double operator*(const Determinant &RHS) const;
     Determinant &operator*=(double constant);
-    friend Determinant operator*(const Determinant &D, double constant);
-    friend Determinant operator*(double constant, const Determinant &D);
+    friend Determinant operator*(Determinant D, double constant);
+    friend Determinant operator*(double constant, Determinant D);
         //division operator overloaded for Determinant / constant
     Determinant &operator/=(double constant);
-    friend Determinant operator/(const Determinant &D, double constant);
+    friend Determinant operator/(Determinant D, double constant);
         //equivalence comparison
     bool operator==(const Determinant &RHS) const;
         //output stream

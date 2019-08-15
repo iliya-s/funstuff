@@ -3,6 +3,7 @@
 #include "MergeSort.h"
 #include "BubbleSort.h"
 #include "InsertionSort.h"
+#include "QuickSort.h"
 
 template<typename T>
 class NumericComparison
@@ -66,4 +67,14 @@ int main(int agrc, char **argv)
         std::cout << test2[i] << " ";
     }
     std::cout << std::endl << std::endl;
+    
+    std::cout << "QuickSort" << std::endl;
+    std::vector<int> test3 = { 10, 4, 2, 8, 6, 11, 155, 123, 67, 89, 34, 0 , -2, 3, 8, 100, 43, 66, 20 };
+    RandomQuickSort(test3);
+    for (int i = 0; i < test3.size(); i++)
+    {
+        std::cout << test3[i] << " ";
+    }
+    std::cout << std::endl << std::endl;
+
 }

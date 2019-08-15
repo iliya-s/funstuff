@@ -1,5 +1,5 @@
-#ifndef MERGE_SORT_HEADER_H
-#define MERGE_SORT_HEADER_H
+#ifndef MERGESORT_HEADER_H
+#define MERGESORT_HEADER_H
 #include <vector>
 
 template<typename T>
@@ -9,25 +9,25 @@ void MergeSortedVectors(const std::vector<T> &LHS, const std::vector<T> &RHS, st
     int l = 0, r = 0;
     while (l < LHS.size() && r < RHS.size())
     {
-        if (LHS[l] < RHS[r])
+        if (LHS.at(l) < RHS.at(r))
         {
-            OUT.push_back(LHS[l]);
+            OUT.push_back(LHS.at(l));
             l++;
         }
         else
         {
-            OUT.push_back(RHS[r]);
+            OUT.push_back(RHS.at(r));
             r++;
         }
     }
     while (l < LHS.size())
     {
-        OUT.push_back(LHS[l]);
+        OUT.push_back(LHS.at(l));
         l++;
     }
     while (r < RHS.size())
     {
-        OUT.push_back(RHS[r]);
+        OUT.push_back(RHS.at(r));
         r++;
     }
 }

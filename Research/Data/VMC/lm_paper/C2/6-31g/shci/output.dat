@@ -1,0 +1,133 @@
+
+     ____  _
+    |  _ \(_) ___ ___
+    | | | | |/ __/ _ \
+    | |_| | | (_|  __/
+    |____/|_|\___\___|   v1.0
+
+
+**************************************************************
+Dice  Copyright (C) 2017  Sandeep Sharma
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU General Public License for more details.
+
+Author:       Sandeep Sharma
+Contributors: James E Smith, Adam A Holmes, Bastien Mussard
+For detailed documentation on Dice please visit
+https://sanshar.github.io/Dice/
+and our group page for up to date information on other projects
+http://www.colorado.edu/lab/sharmagroup/
+**************************************************************
+
+User:             ilsa8974
+Date:             Mon Apr 29 12:39:16 2019
+PID:              44877
+
+Path:             /projects/ilsa8974/apps/Dice/Dice
+Commit:           382bbc2685d31e888356b24c24641e47749ec8b0
+Branch:           master
+Compilation Date: Oct  2 2018 07:41:52
+
+
+**************************************************************
+INPUT FILE
+**************************************************************
+#system
+nocc 12
+0 2 4 6 8 10 1 3 5 7 9 11 
+nroots 1
+#variational
+schedule
+0	0.001
+3	0.0001
+6	1e-05
+end
+davidsonTol 5e-05
+dE 1e-08
+maxiter 12
+#pt
+nPTiter 12
+epsilon2 1e-07
+epsilon2Large 1000
+targetError 0.0001
+sampleN 200
+#misc
+noio
+prefix /rc_scratch/ilsa8974/44805/node0
+DoRDM
+
+
+
+
+**************************************************************
+SELECTING REFERENCE DETERMINANT(S)
+**************************************************************
+2 2 2 2 2   2 0 0 0 0   0 0 0 0 0   0 0 0  Given HF Energy:      -75.3485446590
+2 2 2 0 2   2 2 0 0 0   0 0 0 0 0   0 0 0  Est. Det. Energy:     -75.0957294665
+
+
+**************************************************************
+VARIATIONAL STEP  
+**************************************************************
+Iter Root       Eps1   #Var. Det.               Energy   #Davidson     Time(s)
+   0    0    1.00e-03        1169       -75.5736580835         13        0.08
+   1    0    1.00e-03        5599       -75.6320774206         15        0.16
+   2    0    1.00e-03        7780       -75.6371428049         13        0.20
+   3    0    1.00e-04       94234       -75.6422971004         11        1.67
+   4    0    1.00e-04       98975       -75.6423263651          6        2.02
+   5    0    1.00e-04       99055       -75.6423269718          4        2.27
+   6    0    1.00e-05      771474       -75.6427371914          9       20.63
+   7    0    1.00e-05      785871       -75.6427379977          4       23.21
+   8    0    1.00e-05      785899       -75.6427379987          2       24.97
+Performing final tight davidson with tol: 5e-05
+Exiting variational iterations
+
+Calculating 2-RDM
+E(one-body) from 2RDM:    -131.2416649403
+E(two-body) from 2RDM:      40.2658890540
+E from 2RDM:               -75.6427379987
+
+Variational calculation result
+Root             Energy     Time(s)
+   0      -75.6427379987       36.29
+
+Printing most important determinants
+ Det     weight  Determinant string
+State :   0
+   0      -0.8123737434  2 2 2 2 2   2 0 0 0 0   0 0 0 0 0   0 0 0 
+   1       0.3695280423  2 2 2 0 2   2 2 0 0 0   0 0 0 0 0   0 0 0 
+   2       0.1084545805  2 2 2 2 0   2 0 2 0 0   0 0 0 0 0   0 0 0 
+   3       0.1084545805  2 2 2 2 2   0 0 0 2 0   0 0 0 0 0   0 0 0 
+   4      -0.0973806369  2 2 2 b a   2 b a 0 0   0 0 0 0 0   0 0 0 
+   5      -0.0973806369  2 2 2 a b   2 a b 0 0   0 0 0 0 0   0 0 0 
+
+
+**************************************************************
+PERTURBATION THEORY STEP  
+**************************************************************
+(We cannot perform PT RDM with stochastic PT. Disabling RDM.)
+
+Performing semistochastic PT for state:   0
+
+1/ Deterministic calculation with epsilon2=1e-07
+
+2/ Stochastic calculation with epsilon2=1000
+  Iter          EPTcurrent  State             EPTavg      Error     Time(s)
+     1      -75.6427639942      0     -75.6427639942         --       36.61
+     2      -75.6427522830      0     -75.6427581386         --       36.75
+     3      -75.6427434293      0     -75.6427532355         --       36.88
+     4      -75.6427360470      0     -75.6427489384         --       37.01
+     5      -75.6427667364      0     -75.6427524980   5.86e-06       37.15
+Semistochastic PT calculation converged
+PTEnergy:     -75.6427524980 +/- 5.86e-06
+Time(s):       37.15
+
+
+**************************************************************
+Returning without error
+**************************************************************
+
+

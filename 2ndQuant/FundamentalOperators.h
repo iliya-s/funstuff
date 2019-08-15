@@ -27,8 +27,8 @@ namespace Operator
         Creation &operator()(int spin_orbital);
 
         //application onto Determinant from left and right
-        friend Determinant operator*(const Creation &a_dag, const Determinant &D);
-        friend Determinant operator*(const Determinant &D, const Creation &a_dag);
+        friend Determinant operator*(const Creation &a_dag, Determinant D);
+        friend Determinant operator*(Determinant D, const Creation &a_dag);
         //excitation operator
         friend class Excitation;
     };
@@ -52,8 +52,8 @@ namespace Operator
         Annihilation &operator()(int spin_orbital);
 
         //application onto Determinant from left and right
-        friend Determinant operator*(const Annihilation &a, const Determinant &D);
-        friend Determinant operator*(const Determinant &D, const Annihilation &a);
+        friend Determinant operator*(const Annihilation &a, Determinant D);
+        friend Determinant operator*(const Determinant &D, Annihilation a);
         //excitation operator
         friend class Excitation;
     };

@@ -13,7 +13,7 @@ HOSTNAME := $(shell hostname)
 
 SRC_main = main.cpp
 
-OBJ_main = obj/main.o
+OBJ_main = obj/Main.o
 
 obj/%.o: %.cpp
 	$(CXX) $(FLAGS) $(OPT) -c $< -o $@
