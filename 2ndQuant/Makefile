@@ -1,7 +1,9 @@
 USE_MPI = no
 USE_INTEL = yes
-BOOST = /home/iliya/apps/boost/boost_1_68_0
-EIGEN = /home/iliya/apps/eigen/eigen-eigen-b3f3d4950030
+#BOOST = /home/iliya/apps/boost/boost_1_68_0
+#EIGEN = /home/iliya/apps/eigen/eigen-eigen-b3f3d4950030
+EIGEN = /home/iliya/Desktop/projects/apps/eigen-eigen-323c052e1731
+BOOST = /home/iliya/Desktop/projects/apps/boost_1_70_0
 
 FLAGS = -g -Wall -I${BOOST} -I${EIGEN}
 LFLAGS = -L${BOOST}/stage/lib -lboost_serialization
