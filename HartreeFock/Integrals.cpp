@@ -180,7 +180,6 @@ void ReadMatrix(std::string MatrixFile, int rows, int cols, Eigen::MatrixXd &M)
             f >> M(i, j);
         }
     }
-
     f.close();
 }
 
@@ -199,6 +198,7 @@ void WriteMatrix(std::string MatrixFile, const Eigen::MatrixXd &M)
         }
         f << std::endl;
     }
+    f.close();
 }
 
 void ReadAtomicOrbitalIntegrals(std::string AOFCIDUMP, std::string METRIC, Integral::OneElectron &I1, Integral::TwoElectron &I2, Integral::OneElectron &S, double &core_e, int &norbs, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep)

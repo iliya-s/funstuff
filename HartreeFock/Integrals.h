@@ -49,18 +49,44 @@ namespace Integral
     
         inline double operator() (int i, int j, int k, int l) const
         {
-            int ij = std::max(i, j) * (std::max(i, j) + 1) / 2 + std::min(i, j);
-            int kl = std::max(k, l) * (std::max(k, l) + 1) / 2 + std::min(k, l);
+            int ij, kl;
+            if (ksym == true)
+            {
+                ij = i * norbs + j;
+                kl = k * norbs + l;
+            }
+            else
+            {
+                ij = std::max(i, j) * (std::max(i, j) + 1) / 2 + std::min(i, j);
+                kl = std::max(k, l) * (std::max(k, l) + 1) / 2 + std::min(k, l);
+            }
             int ijkl = std::max(ij, kl) * (std::max(ij, kl) + 1) / 2 + std::min(ij, kl);
             return store.at(ijkl);
         }
         inline double &operator() (int i, int j, int k, int l)
+        {
+            int ij, kl;
+            if (ksym == true)
+            {
+                ij = i * norbs + j;
+                kl = k * norbs + l;
+            }
+            else
+            {
+                ij = std::max(i, j) * (std::max(i, j) + 1) / 2 + std::min(i, j);
+                kl = std::max(k, l) * (std::max(k, l) + 1) / 2 + std::min(k, l);
+            }
+            int ijkl = std::max(ij, kl) * (std::max(ij, kl) + 1) / 2 + std::min(ij, kl);
+            return store.at(ijkl);
+        }
+        /*
         {
             int ij = std::max(i, j) * (std::max(i, j) + 1) / 2 + std::min(i, j);
             int kl = std::max(k, l) * (std::max(k, l) + 1) / 2 + std::min(k, l);
             int ijkl = std::max(ij, kl) * (std::max(ij, kl) + 1) / 2 + std::min(ij, kl);
             return store.at(ijkl);
         }
+        */
     };
 }
 

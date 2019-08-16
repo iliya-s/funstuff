@@ -33,7 +33,7 @@ void CanonicalTransform(const Eigen::MatrixXd &S, Eigen::MatrixXd &X)
             }
         }
         X.resize(dim, cols.size());
-        for (int m = 0, m_max = cols.size(); m < m_max; m++)
+        for (int m = 0; m < cols.size(); m++)
         {
             int index = cols[m];
             double eigval = es.eigenvalues()(index);
