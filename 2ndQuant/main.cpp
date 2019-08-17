@@ -15,13 +15,12 @@ using namespace std;
 
 int Determinant::nbeta;
 int Determinant::nalpha;
-int Determinant::norbs;
+int Determinant::norb;
 int Determinant::len;
 
 
 
-//int main(int argc, char **argv)
-int main(void)
+int main(int argc, char *argv[])
 {
     InitDetVars(0, 10, 10);
 #ifndef SERIAL
@@ -29,16 +28,17 @@ int main(void)
     boost::mpi::communicator world;
 #endif
     long r = 2;
-    cout << bitset<64>(r) << endl;
-    cout << bitset<64>(-r) << endl;
+    cout << r << " in bits: " << bitset<64>(r) << endl;
+    cout << -r << " in bits: " << bitset<64>(-r) << endl;
     long f = 194982;
-    cout << bitset<64>(f) << endl;
-    cout << bitset<64>(-f) << endl;
-    cout << bitset<64>(f & -f) << endl;
-    cout << bitset<64>(f ^ (f & -f)) << endl;
-    cout << __builtin_ctzl(f) << endl;
+    cout << f << " in bits: " << bitset<64>(f) << endl;
+    cout << -f << " in bits: " << bitset<64>(-f) << endl;
+    cout << f << " xor " << -f << ": " << bitset<64>(f & -f) << endl;
+    cout << f << " xor (" << f << " and " << -f << "):" << bitset<64>(f ^ (f & -f)) << endl;
+    cout << "__builtin_ctzl(" << f << ") = " << __builtin_ctzl(f) << endl;
 
     cout << "Determinant" << endl;
+    cout << "set orbital 3alpha" << endl;
     Determinant c;
     cout << c(3, 0) << endl;
     c.set(3, 0, true);
@@ -46,19 +46,24 @@ int main(void)
     cout << c << endl;
     cout << endl;
 
+    cout << "Hartree Fock" << endl;
     Determinant D, M;
     cout << D << endl;
     D.HartreeFock();
+    cout << D << endl;
     M = D;
+    cout << "Overlap" << endl;
     cout << (M * D) << " " << (M == D) << endl;
     cout << endl;
 
+    cout << "save and write" << endl;
     D.write("hi");
     Determinant A;
     A.read("hi");
     cout << A << endl;
     cout << endl;
 
+    cout << "Count set orbs and parity" << endl;
     cout << A.CountSetOrbsTo(3,0) << endl;
     cout << A.parity(3,0) << endl;
     cout << A.CountSetOrbsTo(7) << endl;
@@ -101,6 +106,4 @@ int main(void)
     cout << "L " <<  L << endl;
     TwoDiffOrbIndices(D, L, i, j, o, p);
     cout << i << " " << j << " " << o << " " << p << endl;
-
-
 }

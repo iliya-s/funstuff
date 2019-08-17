@@ -2,10 +2,10 @@
 #include <fstream>
 
 //initialize static variables
-void InitDetVars(int spin, int nelec, int norbs)
+void InitDetVars(int spin, int nelec, int norb)
 {
-    Determinant::norbs = norbs;
-    Determinant::len = norbs / 64 + 1;
+    Determinant::norb = norb;
+    Determinant::len = norb / 64 + 1;
     Determinant::nalpha = nelec / 2 + spin;
     Determinant::nbeta = nelec - Determinant::nalpha;
 }
@@ -15,7 +15,7 @@ Determinant::Determinant()
 {
     String[0] = new long[len];
     String[1] = new long[len];
-    this->vacuum();
+    vacuum();
 }
 
 Determinant::Determinant(const Determinant &D)
@@ -104,7 +104,7 @@ bool Determinant::operator==(const Determinant &RHS) const
 std::ostream &operator<<(std::ostream &os, const Determinant &D)
 {
     os << D.Coeff << " | ";
-    for (int i = 0, norbs = Determinant::norbs; i < norbs; i++)
+    for (int i = 0, norb = Determinant::norb; i < norb; i++)
     {
         bool alpha = D(i, 0);
         bool beta = D(i, 1);
@@ -162,7 +162,11 @@ void Determinant::set(int spin_orbital, bool occupancy)
 }
 
 //coefficient getter and setter
-double Determinant::coeff()
+double Determinant::coeff() const
+{
+    return Coeff;
+}
+double &Determinant::coeff()
 {
     return Coeff;
 }
@@ -233,6 +237,29 @@ double Determinant::parity(int spin_orbital) const
         return 1.0;
     else
         return -1.0;
+}
+    
+//get open and closed orbitals
+void Determinant::OpenClosed(std::vector<int> &open, std::vector<int> &closed) const
+{
+    for (int i = 0; i < 2 * norb; i++)
+    {
+        if ((*this)(i)) { open.push_back(i); }
+        else { closed.push_back(i); }
+    }
+}
+void Determinant::OpenClosed(std::array<std::vector<int>, 2> &open, std::array<std::vector<int>, 2> &closed) const
+{
+    for (int i = 0; i < norb; i++)
+    {
+        //alpha
+        if ((*this)(i, 0)) { open[0].push_back(i); }
+        else { closed[0].push_back(i); }
+
+        //beta
+        if ((*this)(i, 1)) { open[1].push_back(i); }
+        else { closed[1].push_back(i); }
+    }
 }
 
 //write and read

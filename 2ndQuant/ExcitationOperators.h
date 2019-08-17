@@ -45,7 +45,7 @@ namespace Operator
         friend Determinant operator*(const Excitation &E, const Determinant &D)
         {
             Determinant Dcopy(E.a * D);
-            return E.a_dag * Dcopy;;
+            return E.a_dag * Dcopy;
         }
         friend Determinant operator*(const Determinant &D, const Excitation &E)
         {

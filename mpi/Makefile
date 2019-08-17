@@ -1,6 +1,6 @@
 USE_MPI = yes
 USE_INTEL = yes
-BOOST = /home/iliya/apps/boost/boost_1_68_0
+BOOST = /home/iliya/Desktop/projects/apps/boost_1_70_0
 
 FLAGS = -g -Wall -I${BOOST}
 LFLAGS = -L${BOOST}/stage/lib

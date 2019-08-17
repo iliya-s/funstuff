@@ -16,7 +16,7 @@ inline int CountSetBits(long n)
 }
 
 //initialize determinant static variables
-void InitDetVars(int spin, int nelec, int norbs);
+void InitDetVars(int spin, int nelec, int norb);
 
 class Determinant
 {
@@ -34,10 +34,10 @@ class Determinant
     }
 
     //initialize determinant static variables
-    friend void InitDetVars(int spin, int nelec, int norbs);
+    friend void InitDetVars(int spin, int nelec, int norb);
 
     //member variables
-    static int norbs, nalpha, nbeta, len;
+    static int norb, nalpha, nbeta, len;
     double Coeff = 1.0;
     long **String = new long *[2];
 
@@ -69,7 +69,8 @@ class Determinant
     void set(int orbital, int spin, bool occupancy);
     void set(int spin_orbital, bool occupancy);
     //coefficient getter and setter;
-    double coeff();
+    double coeff() const;
+    double &coeff();
     void coeff(double coefficient);
 
     //counts occupied spin orbitals in Determinant
@@ -80,6 +81,9 @@ class Determinant
     //parity
     double parity(int orbital, int spin) const;
     double parity(int spin_orbital) const;
+    //get open and closed orbitals
+    void OpenClosed(std::vector<int> &open, std::vector<int> &closed) const;
+    void OpenClosed(std::array<std::vector<int>, 2> &open, std::array<std::vector<int>, 2> &closed) const;
 
     //write and read
     void write(std::string filename = "Determinant.bkp");
