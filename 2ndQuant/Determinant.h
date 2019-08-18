@@ -27,7 +27,7 @@ class Determinant
     void serialize(Archive &ar, const unsigned int version)
     {
         ar & Coeff;
-        for (int i = 0; i < len; i++)
+        for (int i = 0; i < Len; i++)
         {
             ar & String[0][i] & String[1][i];
         }
@@ -37,32 +37,41 @@ class Determinant
     friend void InitDetVars(int spin, int nelec, int norb);
 
     //member variables
-    static int norb, nalpha, nbeta, len;
+    static int Norb, Nalpha, Nbeta, Len;
     double Coeff = 1.0;
     long **String = new long *[2];
 
     public:
+    //return static values
+    static int norb() { return Norb; }
+    static int nalpha() { return Nalpha; }
+    static int nbeta() { return Nbeta; }
     //constructors and deconstructor
     Determinant();
     Determinant(const Determinant &D);
+    Determinant(const std::vector<int> &spinOrbs); //builds determinant from vector<int> of occupied spin orbitals
+    Determinant(const std::vector<int> &alpha, const std::vector<int> &beta); //builds determinant from vector<int> of occupied alpha and beta orbitals
     ~Determinant();
     
     //operators
-        //copy/assignment operator
+    //copy/assignment operator
     Determinant &operator=(Determinant RHS);
-        //multiplication operator overloaded for <bra|ket>, constant * |ket>, |ket> * constant
+    //multiplication operator overloaded for <bra|ket>, constant * |ket>, |ket> * constant
     double operator*(const Determinant &RHS) const;
     Determinant &operator*=(double constant);
     friend Determinant operator*(Determinant D, double constant);
     friend Determinant operator*(double constant, Determinant D);
-        //division operator overloaded for Determinant / constant
+    //division operator overloaded for Determinant / constant
     Determinant &operator/=(double constant);
     friend Determinant operator/(Determinant D, double constant);
-        //equivalence comparison
+    //equivalence comparison
     bool operator==(const Determinant &RHS) const;
-        //output stream
+    //output stream
     friend std::ostream &operator<<(std::ostream &os, const Determinant &D);
 
+    //functions
+    //unique key to determinant
+    int key() const;
     //spin orbital getter and setter
     bool operator()(int orbital, int spin) const;
     bool operator()(int spin_orbital) const;
@@ -96,10 +105,18 @@ class Determinant
     //zero, sets all orbitals to unoccupied and sets coefficient to 0.0
     void zero();
 
+    //friend object CI vector
+    friend class CIVector;
     //friend functions for hamiltonian overlap
+    //calculates the number of different occupied orbitals between two determinants
     friend int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS);
+    //finds spin orbital indices of differing occupied orbital for two determinants with 1 differing orbital
     friend void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a);
+    //finds spin orbital indices of differing occupied orbitals for two determinants with 2 differing orbitals occupied
     friend void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b);
-    friend void DiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b);
+    friend class Hamiltonian
 };
+
+//generates all n choose k combinations of integers and stores them in combinations
+void GenerateCombinations(int n, int k, std::vector<std::vector<int>> &combinations);
 #endif

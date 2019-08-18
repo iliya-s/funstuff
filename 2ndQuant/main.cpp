@@ -3,9 +3,11 @@
 #include "FundamentalOperators.h"
 #include "NumberOperators.h"
 #include "ExcitationOperators.h"
+#include "CIVector.h"
 #include "Hamiltonian.h"
 
 #include <bitset>
+#include <map>
 
 #ifndef SERIAL
 #include <boost/mpi.hpp>
@@ -13,20 +15,20 @@
 
 using namespace std;
 
-int Determinant::nbeta;
-int Determinant::nalpha;
-int Determinant::norb;
-int Determinant::len;
+int Determinant::Nbeta;
+int Determinant::Nalpha;
+int Determinant::Norb;
+int Determinant::Len;
 
 
 
 int main(int argc, char *argv[])
 {
-    InitDetVars(0, 10, 10);
+    InitDetVars(0, 10, 8);
 #ifndef SERIAL
     boost::mpi::environment env(argc, argv);
     boost::mpi::communicator world;
-#endif
+#endif 
     long r = 2;
     cout << r << " in bits: " << bitset<64>(r) << endl;
     cout << -r << " in bits: " << bitset<64>(-r) << endl;
@@ -106,4 +108,37 @@ int main(int argc, char *argv[])
     cout << "L " <<  L << endl;
     TwoDiffOrbIndices(D, L, i, j, o, p);
     cout << i << " " << j << " " << o << " " << p << endl;
+    std::cout << std::endl << "FCI-vector" << std::endl;
+
+    std::vector<std::vector<int>> alpha, beta;
+    GenerateCombinations(4, 2, alpha);
+    GenerateCombinations(4, 3, beta);
+    std::cout << std::endl << "alpha comb" << std::endl;
+    std::cout << alpha.size() << endl << endl;
+    for (int i = 0; i < alpha.size(); i++)
+    {
+        for (int j = 0; j < alpha[i].size(); j++)
+        {
+            std::cout << alpha[i][j];
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl << "beta comb" << std::endl;
+    std::cout << beta.size() << endl << endl;
+    for (int i = 0; i < beta.size(); i++)
+    {
+        for (int j = 0; j < beta[i].size(); j++)
+        {
+            std::cout << beta[i][j];
+        }
+        std::cout << std::endl;
+    }
+    cout << endl;
+
+    FCIVector V;
+    cout << V.size() << endl;
+    cout << V(V(100)) << endl;
+    V(V(100)) = 4;
+    cout << V(V(100)) << endl;
+    Hamiltonian H;
 }
