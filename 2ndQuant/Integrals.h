@@ -12,23 +12,20 @@ namespace Integral
         private:
         friend class boost::serialization::access;
         template <class Archive>
-        void serialize(Archive &ar, const unsigned int version)
-        {
-            ar & store & norb;
-        }
+        void serialize(Archive &ar, const unsigned int version) { ar & Store & Norb; }
+    
+        std::vector<double> Store;
+        int Norb;
     
         public:
-        std::vector<double> store;
-        int norb;
-    
-        inline double operator() (int i, int j) const
-        {
-            return store.at(i * norb + j);
+        inline void init(int norb)
+        { 
+            Norb = norb;
+            Store.resize(Norb * Norb);
         }
-        inline double &operator() (int i, int j)
-        {
-            return store.at(i * norb + j);
-        }
+
+        inline double operator() (int i, int j) const { return Store.at(i * Norb + j); }
+        inline double &operator() (int i, int j) { return Store.at(i * Norb + j); }
     };
     
     class TwoElectron
@@ -36,24 +33,32 @@ namespace Integral
         private:
         friend class boost::serialization::access;
         template <class Archive>
-        void serialize(Archive &ar, const unsigned int version)
-        {
-            ar & store & norb;
-        }
+        void serialize(Archive &ar, const unsigned int version) { ar & Store & Norb; }
+    
+        bool Ksym;
+        std::vector<double> Store;
+        int Norb;
     
         public:
-        bool ksym;
-        std::vector<double> store;
-        int norb;
-        Eigen::MatrixXd Direct, Exchange;
-    
+        inline void init(int norb, bool ksym)
+        {
+            Norb = norb;
+            Ksym = ksym;
+            int npair = Norb * (Norb + 1) / 2;
+            if (Ksym == true)
+            {
+                npair = Norb * Norb;
+            }
+            Store.resize(npair * (npair + 1) / 2);
+        }
+
         inline double operator() (int i, int j, int k, int l) const
         {
             int ij, kl;
-            if (ksym == true)
+            if (Ksym == true)
             {
-                ij = i * norb + j;
-                kl = k * norb + l;
+                ij = i * Norb + j;
+                kl = k * Norb + l;
             }
             else
             {
@@ -61,15 +66,15 @@ namespace Integral
                 kl = std::max(k, l) * (std::max(k, l) + 1) / 2 + std::min(k, l);
             }
             int ijkl = std::max(ij, kl) * (std::max(ij, kl) + 1) / 2 + std::min(ij, kl);
-            return store.at(ijkl);
+            return Store.at(ijkl);
         }
         inline double &operator() (int i, int j, int k, int l)
         {
             int ij, kl;
-            if (ksym == true)
+            if (Ksym == true)
             {
-                ij = i * norb + j;
-                kl = k * norb + l;
+                ij = i * Norb + j;
+                kl = k * Norb + l;
             }
             else
             {
@@ -77,26 +82,18 @@ namespace Integral
                 kl = std::max(k, l) * (std::max(k, l) + 1) / 2 + std::min(k, l);
             }
             int ijkl = std::max(ij, kl) * (std::max(ij, kl) + 1) / 2 + std::min(ij, kl);
-            return store.at(ijkl);
+            return Store.at(ijkl);
         }
-        /*
-        {
-            int ij = std::max(i, j) * (std::max(i, j) + 1) / 2 + std::min(i, j);
-            int kl = std::max(k, l) * (std::max(k, l) + 1) / 2 + std::min(k, l);
-            int ijkl = std::max(ij, kl) * (std::max(ij, kl) + 1) / 2 + std::min(ij, kl);
-            return store.at(ijkl);
-        }
-        */
     };
 }
 
-void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoElectron &I2, double &core_e, int &norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);
+void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoElectron &I2, double &core_e, int &Norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);
 
-void ReadSquareMatrixIntoOneInt(std::string MatrixFile, int norb, Integral::OneElectron &I);
+void ReadSquareMatrixIntoOneInt(std::string MatrixFile, int Norb, Integral::OneElectron &I);
 
 void ReadMatrix(std::string MatrixFile, int rows, int cols, Eigen::MatrixXd &M);
 
 void WriteMatrix(std::string MatrixFile, const Eigen::MatrixXd &M);
 
-void ReadAtomicOrbitalIntegrals(std::string AOFCIDUMP, std::string METRIC, Integral::OneElectron &AI1, Integral::TwoElectron &AI2, Integral::OneElectron &S, double &core_e, int &norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);
+void ReadAtomicOrbitalIntegrals(std::string AOFCIDUMP, std::string METRIC, Integral::OneElectron &AI1, Integral::TwoElectron &AI2, Integral::OneElectron &S, double &core_e, int &Norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);
 #endif

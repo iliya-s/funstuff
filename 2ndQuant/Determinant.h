@@ -1,5 +1,5 @@
-#ifndef DETERMINANT_HEADER_H
-#define DETERMINANT_HEADER_H
+#ifndef DETERMINANT_HEADER
+#define DETERMINANT_HEADER
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 
@@ -71,7 +71,7 @@ class Determinant
 
     //functions
     //unique key to determinant
-    int key() const;
+    std::size_t key() const;
     //spin orbital getter and setter
     bool operator()(int orbital, int spin) const;
     bool operator()(int spin_orbital) const;
@@ -98,23 +98,23 @@ class Determinant
     void write(std::string filename = "Determinant.bkp");
     void read(std::string filename = "Determinant.bkp");
     
-    //hartree fock determinant, sets lowest indexed nelec spin orbitals to occupied
+    //hartree fock determinant, sets lowest indexed nalpha and nbeta orbitals to occupied
     void HartreeFock();
     //vacuum vector, sets all orbitals to unoccupied and the coefficient to 1.0
     void vacuum();
     //zero, sets all orbitals to unoccupied and sets coefficient to 0.0
     void zero();
 
-    //friend object CI vector
-    friend class CIVector;
+    //friend object Fock vector
+    friend class FockVector;
     //friend functions for hamiltonian overlap
+    friend class Hamiltonian;
     //calculates the number of different occupied orbitals between two determinants
     friend int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS);
     //finds spin orbital indices of differing occupied orbital for two determinants with 1 differing orbital
     friend void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a);
     //finds spin orbital indices of differing occupied orbitals for two determinants with 2 differing orbitals occupied
     friend void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b);
-    friend class Hamiltonian
 };
 
 //generates all n choose k combinations of integers and stores them in combinations

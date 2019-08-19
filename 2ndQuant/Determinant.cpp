@@ -1,6 +1,5 @@
 #include "Determinant.h"
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <functional>
 
@@ -9,7 +8,7 @@ void InitDetVars(int spin, int nelec, int norb)
 {
     Determinant::Norb = norb;
     Determinant::Len = norb / 64 + 1;
-    Determinant::Nalpha = nelec / 2 + spin;
+    Determinant::Nalpha = (nelec + spin) / 2;
     Determinant::Nbeta = nelec - Determinant::Nalpha;
 }
 
@@ -35,6 +34,8 @@ Determinant::Determinant(const Determinant &D)
 
 Determinant::Determinant(const std::vector<int> &spinOrbs) //builds determinant from vector<int> of occupied spin orbitals
 {
+    String[0] = new long[Len];
+    String[1] = new long[Len];
     vacuum();
     for (int i = 0; i < spinOrbs.size(); i++)
     {
@@ -68,7 +69,7 @@ Determinant::~Determinant()
 //operators
 
     //unique key to determinant
-int Determinant::key() const
+std::size_t Determinant::key() const
 {
     std::string str;
     for (int i = 0; i < Len; i++)
@@ -324,14 +325,17 @@ void Determinant::read(std::string filename)
     ifs.close();
 }
 
-//hartree fock determinant, sets lowest indexed nelec electrons to occupied
+//hartree fock determinant, sets lowest indexed nalpha and nbeta electrons to occupied
 void Determinant::HartreeFock()
 {
     vacuum();
-    int nelec = nalpha() + nbeta();
-    for (int i = 0; i < nelec; i++)
+    for (int i = 0; i < nalpha(); i++)
     {
-        set(i, true);
+        set(i, 0, true);
+    }
+    for (int i = 0; i < nbeta(); i++)
+    {
+        set(i, 1, true);
     }
 }
 
@@ -360,8 +364,6 @@ void Determinant::zero()
 void GenerateCombinations(int n, int k, std::vector<std::vector<int>> &combinations)
 {
     combinations.clear();
-    //std::cout << n;
-    //std::cout << k << std::endl;
 
     std::vector<bool> v(n);
     std::fill(v.begin(), v.begin() + k, true);
@@ -372,12 +374,10 @@ void GenerateCombinations(int n, int k, std::vector<std::vector<int>> &combinati
         {
             if (v[i])
             {
-                //std::cout << (i + 1) << " ";
                 comb.push_back(i);
             }
         }
         combinations.push_back(comb);
-        //std::cout << "\n";
     } while (std::prev_permutation(v.begin(), v.end()));
 }
 

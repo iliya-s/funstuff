@@ -19,7 +19,7 @@ void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoEl
     norb = -1;
     nelec = -1;
     sz = -1;
-    I2.ksym == false;
+    bool ksym = false;
 
     std::string line;
     std::vector<std::string> token;
@@ -28,48 +28,25 @@ void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoEl
         std::getline(f, line);
         boost::algorithm::trim(line);
         boost::split(token, line, boost::is_any_of(", \t="), boost::token_compress_on);
-        if (token.size() == 1 && token[0] == "&END")
-        {
-            break;
-        }
+
+        if (token.size() == 1 && token[0] == "&END") { break; }
         else
         {
             if (token[0] == "&FCI")
             {
-                if (token[1] == "NORB")
-                {
-                    norb = std::stoi(token[2]);
-                }
-                if (token[3] == "NELEC")
-                {
-                    nelec = std::stoi(token[4]);
-                }
-                if (token[5] == "MS2")
-                {
-                    sz = std::stoi(token[6]);
-                }
+                if (token[1] == "NORB") { norb = std::stoi(token[2]); }
+                if (token[3] == "NELEC") { nelec = std::stoi(token[4]); }
+                if (token[5] == "MS2") { sz = std::stoi(token[6]); }
             }
-            else if (token[0] == "ISYM")
-            {
-                continue;
-            }
-            else if (token[0] == "KSYM")
-            {
-                I2.ksym = true;
-            }
+            else if (token[0] == "ISYM") { continue; }
+            else if (token[0] == "KSYM") { ksym = true; }
             else if (token[0] == "ORBSYM")
             {
-                for (int i = 1; (i < token.size() && token[i] != "\0"); i++)
-                {
-                    irrep.push_back(std::stoi(token[i]));
-                }
+                for (int i = 1; (i < token.size() && token[i] != "\0"); i++) { irrep.push_back(std::stoi(token[i])); }
             }
             else 
             {
-                for (int i = 0; (i < token.size() && token[i] != "\0"); i++)
-                {
-                    irrep.push_back(std::stoi(token[i]));
-                }
+                for (int i = 0; (i < token.size() && token[i] != "\0"); i++) { irrep.push_back(std::stoi(token[i])); }
             }
         }
     } //while
@@ -84,17 +61,8 @@ void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoEl
     nbeta = nelec - nalpha;
     irrep.resize(norb);
 
-    int npair = norb * (norb + 1) / 2;
-    if (I2.ksym)
-    {
-        npair = norb * norb;
-    }
-
-    I2.norb = norb;
-    I2.store.resize(npair * (npair + 1) / 2);
-
-    I1.norb = norb;
-    I1.store.resize(norb * norb);
+    I1.init(norb);
+    I2.init(norb, ksym);
 
     while(!f.eof())
     {
@@ -108,36 +76,16 @@ void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoEl
             int b = std::stoi(token[2]);
             int c = std::stoi(token[3]);
             int d = std::stoi(token[4]);
-            if (a == 0 && b == 0 && c == 0 && d == 0)
-            {
-                core_e = integral;
-            }
-            else if (b == 0 && c == 0 && d == 0)
-            {
-                continue;   //orbital energy
-            }
+            if (a == 0 && b == 0 && c == 0 && d == 0) { core_e = integral; }
+            else if (b == 0 && c == 0 && d == 0) { continue; } //orbital energy
             else if (a != 0 && b != 0 && c == 0 && d == 0)
             {
                 I1((a - 1), (b - 1)) = integral;
                 I1((b - 1), (a - 1)) = integral;
             }
-            else if (a != 0 && b != 0 && c != 0 && d != 0)
-            {
-                I2((a - 1), (b - 1), (c - 1), (d - 1)) = integral;
-            }
+            else if (a != 0 && b != 0 && c != 0 && d != 0) { I2((a - 1), (b - 1), (c - 1), (d - 1)) = integral; }
         }
     } // while
-
-    I2.Direct.resize(norb, norb);
-    I2.Exchange.resize(norb, norb);
-    for (int i = 0; i < norb; i++)
-    {
-        for (int j = 0; j < norb; j++)
-        {
-            I2.Direct(i, j) = I2(i, i, j, j);
-            I2.Exchange(i, j) = I2(i, j, j, i);
-        }
-    }
     f.close();
 }
 
@@ -150,16 +98,11 @@ void ReadSquareMatrixIntoOneInt(std::string MatrixFile, int norb, Integral::OneE
         exit(1);
     }
 
-    I.norb = norb;
-    I.store.resize(norb * norb);
+    I.init(norb);
     for (int i = 0; i < norb; i++)
     {
-        for (int j = 0; j < norb; j++)
-        {
-            f >> I(i, j);
-        }
+        for (int j = 0; j < norb; j++) { f >> I(i, j); }
     }
-
     f.close();
 }
 
@@ -175,10 +118,7 @@ void ReadMatrix(std::string MatrixFile, int rows, int cols, Eigen::MatrixXd &M)
     M.resize(rows, cols);
     for (int i = 0; i < rows; i++)
     {
-        for (int j = 0; j < cols; j++)
-        {
-            f >> M(i, j);
-        }
+        for (int j = 0; j < cols; j++) { f >> M(i, j); }
     }
     f.close();
 }
@@ -192,10 +132,7 @@ void WriteMatrix(std::string MatrixFile, const Eigen::MatrixXd &M)
     }
     for (int i = 0; i < M.rows(); i++)
     {
-        for (int j = 0; j < M.cols(); j++)
-        {
-            f << M(i, j) << "\t";
-        }
+        for (int j = 0; j < M.cols(); j++) { f << M(i, j) << "\t"; }
         f << std::endl;
     }
     f.close();
