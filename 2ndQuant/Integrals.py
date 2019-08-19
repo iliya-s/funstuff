@@ -4,8 +4,9 @@ import sys
 
 #build molecule
 mol = gto.Mole()
-#mol.atom = 'H 0 0 0; H 0 0 1.4'
+#mol.atom = 'H 0 0 0; He 0 0 1.4'
 mol.atom = 'Be 0 0 0'
+#mol.atom = 'C 0 0 0'
 #mol.basis = 'sto-3g'
 mol.basis = 'sto-6g'
 #mol.basis = 'ccpvdz'

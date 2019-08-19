@@ -28,9 +28,9 @@ namespace Operator
         Integral::TwoElectron I2;
     
         public:
-        Hamiltonian()
+        Hamiltonian(std::string filename = "FCIDUMP")
         {
-            ReadFCIDUMP("FCIDUMP", I1, I2, core_e, norb, nelec, nalpha, nbeta, sz, irrep);
+            ReadFCIDUMP(filename, I1, I2, core_e, norb, nelec, nalpha, nbeta, sz, irrep);
             InitDetVars(sz, nelec, norb);
         }
     
@@ -57,8 +57,8 @@ namespace Operator
                 {
                     for (int j = 0; j < closed[sz].size(); j++)
                     {
-                        E += 0.5 * I2(closed[sz][i], closed[sz][i], closed[sz][j], closed[sz][j]);
-                        E -= 0.5 * I2(closed[sz][i], closed[sz][j], closed[sz][j], closed[sz][i]);
+                        E += 0.5 * I2(closed[sz][i], closed[sz][i], closed[sz][j], closed[sz][j]); //direct
+                        E -= 0.5 * I2(closed[sz][i], closed[sz][j], closed[sz][j], closed[sz][i]); //exchange
                     }
                 }
             }
@@ -66,7 +66,7 @@ namespace Operator
             {
                 for (int b = 0; b < closed[1].size(); b++)
                 {
-                    E += I2(closed[0][a], closed[0][a], closed[1][b], closed[1][b]);
+                    E += I2(closed[0][a], closed[0][a], closed[1][b], closed[1][b]); //direct
                 }
             }
             return E;
@@ -78,7 +78,7 @@ namespace Operator
             int i = 0;
             for (auto it = CI.begin(); it != CI.end(); ++it)
             {
-                V(i) = energy(it->second);
+                V(i) = energy(*it);
                 i++;
             }
         }
@@ -92,7 +92,7 @@ namespace Operator
                 int j = 0;
                 for (auto it1 = CI.begin(); it1 != CI.end(); ++it1)
                 {
-                    H(i, j) = (*this)(it->second, it1->second);
+                    H(i, j) = (*this)(*it, *it1);
                     j++;
                 }
                 i++;
@@ -164,11 +164,11 @@ namespace Operator
     
                 //one electron operator = 0
                 //two electron operator
-                if (si == sa && sj == sb) //first term
+                if (si == sa && sj == sb) //direct
                 {
                     H += pi * pj * pa * pb * I2(orbi, orba, orbj, orbb);
                 }
-                if (si == sb && sj == sa) //second term
+                if (si == sb && sj == sa) //exchange
                 {
                     H -= pi * pj * pa * pb * I2(orbi, orbb, orbj, orba);
                 }

@@ -1,23 +1,38 @@
 #ifndef FOCKVECTOR_HEADER
 #define FOCKVECTOR_HEADER
 #include "Determinant.h"
-#include <map>
+#include <set>
 #include <iostream>
 #include <Eigen/Dense>
 
 class FockVector
 {
     protected:
-    std::map<std::size_t, Determinant> Store;
+    std::set<Determinant> Store;
 
     public:
-    std::size_t size() const { return Store.size(); }
-    auto begin() { return Store.begin(); }
-    auto end() { return Store.end(); }
-    auto begin() const { return Store.begin(); }
-    auto end() const { return Store.end(); }
-    double at(const Determinant &D) const { return Store.at(D.key()).coeff(); }
-    double &at(const Determinant &D) { return Store.at(D.key()).coeff(); }
+    std::size_t size() const { return Store.size(); } //number of determinants in vector
+    auto begin() { return Store.begin(); } //begin iterator
+    auto end() { return Store.end(); } //end iterator
+    auto begin() const { return Store.begin(); } //begin const iterator
+    auto end() const { return Store.end(); } //end const iterator
+    void insert(const Determinant &D) { Store.emplace(D); } //insert ln(N)
+    void remove(const Determinant &D) { Store.erase(D); } //delete ln(N)
+    void clear() { Store.clear(); } //clear vector
+    void ones() { for (auto it = begin(); it != end(); ++it) { it->Coeff = 1.0; } } //sets all coefficients to one
+    double at(const Determinant &D) const
+    {
+        double val = 0.0;
+        auto search = Store.find(D);
+        if (search != end()) { val = search->coeff(); }
+        return val;
+    }
+    double &at(const Determinant &D)
+    {
+        auto search = Store.find(D);
+        assert(search != end());
+        return search->Coeff;
+    }
 
     void update(const Eigen::VectorXd &V)
     {
@@ -25,8 +40,8 @@ class FockVector
         int i = 0;
         for (auto it = begin(); it != end(); ++it)
         {
-            if (std::abs(V(i)) < 1.e-8) { it->second.coeff(0.0); }
-            else { it->second.coeff(V(i)); }
+            if (std::abs(V(i)) < 1.e-8) { it->Coeff = 0.0; }
+            else { it->Coeff = V(i); }
             i++;
         }
     }
@@ -37,18 +52,18 @@ class FockVector
         int i = 0;
         for (auto it = begin(); it != end(); ++it)
         {
-            double val = it->second.coeff();
+            double val = it->coeff();
             if (std::abs(val) > 1.e-8) { V(i) = val; }
             i++;
         } 
     }
 
-    void trim(double e = 1.e-8)
+    void trim(double tol = 1.e-8)
     {
         auto it = begin();
         while (it != end())
         {
-            if (std::abs(it->second.coeff()) < e) { Store.erase(it++); }
+            if (std::abs(it->coeff()) < tol) { Store.erase(it++); }
             else { ++it; }
         } 
     }
@@ -60,7 +75,7 @@ inline std::ostream &operator<<(std::ostream &os, const FockVector &V)
 {
     for (auto it = V.begin(); it != V.end(); ++it)
     {
-        std::cout << it->second << std::endl;
+        std::cout << *it << std::endl;
     }
     return os;
 }
@@ -79,11 +94,32 @@ class FCIVector: public FockVector
         {
             for (int j = 0; j < beta.size(); j++)
             {
-                Determinant det(alpha[i], beta[j]);
-                Store.emplace(det.key(), det);
+                Store.emplace(Determinant(alpha[i], beta[j]));
             }
         }
         assert(size() == alpha.size() * beta.size());
+    }
+
+    double operator()(const Determinant &D) const { return at(D); }
+    double &operator()(const Determinant &D) { return at(D); }
+};
+
+class CISDVector: public FockVector
+{
+    private:
+
+    public:
+    CISDVector()
+    {
+        Determinant hf;
+        hf.HartreeFock();
+        std::vector<Determinant> dets;
+        hf.connected(dets);
+        for (int i = 0; i < dets.size(); i++)
+        {
+            insert(dets[i]);
+        } 
+        assert(hf.numConnected() == dets.size());
     }
 
     double operator()(const Determinant &D) const { return at(D); }

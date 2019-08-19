@@ -1,7 +1,10 @@
 #include "Determinant.h"
+#include "FockVector.h"
 #include <fstream>
 #include <string>
 #include <functional>
+
+using namespace std;
 
 //initialize static variables
 void InitDetVars(int spin, int nelec, int norb)
@@ -74,7 +77,7 @@ std::size_t Determinant::key() const
     std::string str;
     for (int i = 0; i < Len; i++)
     {
-        str += std::to_string(String[0][i]) + std::to_string(String[1][i]);
+        str = std::to_string(String[1][i]) + std::to_string(String[0][i]) + str;
     }
     return std::hash<std::string>{}(str);
 }
@@ -139,6 +142,30 @@ bool Determinant::operator==(const Determinant &RHS) const
             return false;
     }
     return true;
+}
+
+bool Determinant::operator<(const Determinant &RHS) const
+{
+    bool test = false;
+    for (int i = Len - 1; i >= 0; i--)
+    {
+        if (String[0][i] < RHS.String[0][i])
+        {
+            test = true;
+            break;
+        }
+        else if (String[0][i] > RHS.String[0][i])
+            break;
+        
+        if (String[1][i] < RHS.String[1][i])
+        {
+            test = true;
+            break;
+        }
+        else if (String[1][i] > RHS.String[1][i])
+            break;
+    }
+    return test;
 }
 
     //output stream
@@ -361,24 +388,107 @@ void Determinant::zero()
     }
 }
 
-void GenerateCombinations(int n, int k, std::vector<std::vector<int>> &combinations)
+//generates all connected determinants from a given det, ie d + single excitations + double excitations
+int Determinant::numConnected() const
 {
-    combinations.clear();
-
-    std::vector<bool> v(n);
-    std::fill(v.begin(), v.begin() + k, true);
-    do
+    int num = 1; //self
+    std::array<std::vector<int>, 2> open, closed;
+    OpenClosed(open, closed);
+    //single excitations
+    for (int sz = 0; sz < 2; sz++)
     {
-        std::vector<int> comb;
-        for (int i = 0; i < n; ++i)
+        num += closed[sz].size() * open[sz].size();
+    }
+
+    //double excitations
+    for (int sz = 0; sz < 2; sz++) //like spin
+    {
+        int pickclosed = closed[sz].size() * (closed[sz].size() - 1) / 2;
+        int pickopen = open[sz].size() * (open[sz].size() - 1) / 2;
+        num +=  pickclosed * pickopen;
+    }
+    //differing spin
+    int pickclosed = closed[0].size() * closed[1].size();
+    int pickopen = open[0].size() * open[1].size();    
+    num += pickclosed * pickopen;
+    return num;
+}
+
+void Determinant::connected(std::vector<Determinant> &dets) const
+{
+    dets.clear();
+    Determinant dcopy(*this);
+    dcopy.coeff(1.0);
+    std::array<std::vector<int>, 2> open, closed;
+    dcopy.OpenClosed(open, closed);
+
+    //self
+    dets.push_back(dcopy);
+    //single excitations
+    for (int sz = 0; sz < 2; sz++)
+    {
+        for (int i = 0; i < closed[sz].size(); i++)
         {
-            if (v[i])
+            for (int a = 0; a < open[sz].size(); a++)
             {
-                comb.push_back(i);
+                int p = closed[sz][i];
+                int q = open[sz][a];
+                Determinant dexcite(dcopy);
+                dexcite.set(p, sz, false);
+                dexcite.set(q, sz, true); 
+                dets.push_back(dexcite);
             }
         }
-        combinations.push_back(comb);
-    } while (std::prev_permutation(v.begin(), v.end()));
+    }
+    
+    //double excitations
+    for (int sz = 0; sz < 2; sz++) //like spin
+    {
+        for (int i = 0; i < closed[sz].size(); i++)
+        {
+            for (int j = i + 1; j < closed[sz].size(); j++)
+            {
+                for (int a = 0; a < open[sz].size(); a++)
+                {
+                    for (int b = a + 1; b < open[sz].size(); b++)
+                    {
+                        int p = closed[sz][i];
+                        int q = closed[sz][j];
+                        int r = open[sz][a];
+                        int s = open[sz][b];
+                        Determinant dexcite(dcopy);
+                        dexcite.set(p, sz, false);
+                        dexcite.set(q, sz, false); 
+                        dexcite.set(r, sz, true);
+                        dexcite.set(s, sz, true); 
+                        dets.push_back(dexcite);
+                    }
+                }
+            }
+        }
+    }
+    for (int i = 0; i < closed[0].size(); i++) //differing spin
+    {
+        for (int j = 0; j < closed[1].size(); j++)
+        {
+            for (int a = 0; a < open[0].size(); a++)
+            {
+                for (int b = 0; b < open[1].size(); b++)
+                {
+                    int p = closed[0][i];
+                    int q = closed[1][j];
+                    int r = open[0][a];
+                    int s = open[1][b];
+                    Determinant dexcite(dcopy);
+                    dexcite.set(p, 0, false);
+                    dexcite.set(q, 1, false); 
+                    dexcite.set(r, 0, true);
+                    dexcite.set(s, 1, true); 
+                    dets.push_back(dexcite);
+                }
+            }
+        }
+    }
 }
 
 //calculates the number of different occupied orbitals between two determinants
@@ -521,4 +631,24 @@ void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, i
         a = std::min(indices[1], indices[0]);
         b = std::max(indices[1], indices[0]);
     }
+}
+
+void GenerateCombinations(int n, int k, std::vector<std::vector<int>> &combinations)
+{
+    combinations.clear();
+
+    std::vector<bool> v(n);
+    std::fill(v.begin(), v.begin() + k, true);
+    do
+    {
+        std::vector<int> comb;
+        for (int i = 0; i < n; ++i)
+        {
+            if (v[i])
+            {
+                comb.push_back(i);
+            }
+        }
+        combinations.push_back(comb);
+    } while (std::prev_permutation(v.begin(), v.end()));
 }

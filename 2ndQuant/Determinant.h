@@ -38,7 +38,7 @@ class Determinant
 
     //member variables
     static int Norb, Nalpha, Nbeta, Len;
-    double Coeff = 1.0;
+    mutable double Coeff = 1.0;
     long **String = new long *[2];
 
     public:
@@ -66,6 +66,8 @@ class Determinant
     friend Determinant operator/(Determinant D, double constant);
     //equivalence comparison
     bool operator==(const Determinant &RHS) const;
+    //less than comparison
+    bool operator<(const Determinant &RHS) const;
     //output stream
     friend std::ostream &operator<<(std::ostream &os, const Determinant &D);
 
@@ -104,11 +106,14 @@ class Determinant
     void vacuum();
     //zero, sets all orbitals to unoccupied and sets coefficient to 0.0
     void zero();
+    //generates all connected determinants from a given det, ie d + single excitations + double excitations
+    int numConnected() const;
+    void connected(std::vector<Determinant> &dets) const;
 
-    //friend object Fock vector
-    friend class FockVector;
     //friend functions for hamiltonian overlap
     friend class Hamiltonian;
+    //friend object Fock vector
+    friend class FockVector;
     //calculates the number of different occupied orbitals between two determinants
     friend int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS);
     //finds spin orbital indices of differing occupied orbital for two determinants with 1 differing orbital

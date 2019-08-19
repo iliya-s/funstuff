@@ -179,7 +179,58 @@ int main(int argc, char *argv[])
         Eigen::VectorXd test;
         FCI.vector(test);
         cout << test.transpose() * gs << endl;
-        FCI.trim();
+        FCI.trim(1.e-3);
         std::cout << FCI << std::endl;
+    }
+
+    {
+        cout << "generating connected determinants" << endl;
+        Operator::Hamiltonian H;
+        Determinant hf;
+        hf.HartreeFock();
+        std::vector<Determinant> V;
+        hf.connected(V);
+        cout << V.size() << endl;
+        /*
+        for (int i = 0; i < V.size(); i++)
+        {
+            cout << V[i] << endl;
+        }
+        */
+    }
+
+    {
+        cout << "CISD" << endl;
+        cout << "hf det and energy" << std::endl;
+        Operator::Hamiltonian H;
+        Determinant hf;
+        hf.HartreeFock();
+        cout << H.energy(hf) * hf << endl;
+        CISDVector CI;
+        cout << "size of fock space: " << CI.size() << endl;
+        cout << "Diagonal" << std::endl;
+        Eigen::VectorXd V;
+        H.diagonal(CI, V);
+        cout << V.transpose() << endl << endl;
+        cout << "Matrix" << std::endl;
+        Eigen::MatrixXd Ham;
+        H.matrix(CI, Ham);
+        Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
+        if (Ham.cols() <= 10)
+        {
+            cout << Ham << endl << endl;
+            cout << "\nEigenproblem Solution" << std::endl;
+            std::cout << es.eigenvalues().transpose() << std::endl << std::endl;
+            std::cout << es.eigenvectors() << std::endl;
+        }
+        cout << "\nGround state" << std::endl;
+        cout << "Energy: " << es.eigenvalues()(0) << endl;
+        Eigen::VectorXd gs = es.eigenvectors().col(0);
+        CI.update(gs);
+        Eigen::VectorXd test;
+        CI.vector(test);
+        cout << test.transpose() * gs << endl;
+        CI.trim(1.e-3);
+        std::cout << CI << std::endl;
     }
 }
