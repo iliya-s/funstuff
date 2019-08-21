@@ -5,10 +5,12 @@
 #include "ExcitationOperators.h"
 #include "FockVector.h"
 #include "Hamiltonian.h"
+#include "Davidson.h"
 #include <Eigen/Dense>
 
 #include <bitset>
-#include <map>
+//#include <map>
+#include <ctime>
 
 #ifndef SERIAL
 #include <boost/mpi.hpp>
@@ -20,6 +22,7 @@ int Determinant::Nbeta;
 int Determinant::Nalpha;
 int Determinant::Norb;
 int Determinant::Len;
+
 
 int main(int argc, char *argv[])
 {
@@ -148,6 +151,7 @@ int main(int argc, char *argv[])
         cout << V.size() << endl;
     }
     
+    /*
     {
         cout << "Hamiltonian" << std::endl;
         cout << "hf det and energy" << std::endl;
@@ -157,11 +161,11 @@ int main(int argc, char *argv[])
         cout << H.energy(hf) * hf << endl;
         FCIVector FCI;
         cout << "size of fock space: " << FCI.size() << endl;
-        cout << "Diagonal" << std::endl;
+        //cout << "Diagonal" << std::endl;
         Eigen::VectorXd V;
         H.diagonal(FCI, V);
-        cout << V.transpose() << endl << endl;
-        cout << "Matrix" << std::endl;
+        //cout << V.transpose() << endl << endl;
+        //cout << "Matrix" << std::endl;
         Eigen::MatrixXd Ham;
         H.matrix(FCI, Ham);
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
@@ -174,7 +178,10 @@ int main(int argc, char *argv[])
         }
         cout << "\nGround state" << std::endl;
         cout << "Energy: " << es.eigenvalues()(0) << endl;
+        double val = es.eigenvalues()(0);
         Eigen::VectorXd gs = es.eigenvectors().col(0);
+        Eigen::VectorXd r = Ham * gs - val * gs;
+        cout << "residual: " << r.norm() << endl;
         FCI.update(gs);
         Eigen::VectorXd test;
         FCI.vector(test);
@@ -182,6 +189,7 @@ int main(int argc, char *argv[])
         FCI.trim(1.e-3);
         std::cout << FCI << std::endl;
     }
+    */
 
     {
         cout << "generating connected determinants" << endl;
@@ -200,7 +208,7 @@ int main(int argc, char *argv[])
     }
 
     {
-        cout << "CISD" << endl;
+        cout << "\n\nCISD" << endl;
         cout << "hf det and energy" << std::endl;
         Operator::Hamiltonian H;
         Determinant hf;
@@ -208,14 +216,16 @@ int main(int argc, char *argv[])
         cout << H.energy(hf) * hf << endl;
         CISDVector CI;
         cout << "size of fock space: " << CI.size() << endl;
-        cout << "Diagonal" << std::endl;
+        //cout << "Diagonal" << std::endl;
         Eigen::VectorXd V;
         H.diagonal(CI, V);
-        cout << V.transpose() << endl << endl;
+        //cout << V.transpose() << endl << endl;
         cout << "Matrix" << std::endl;
         Eigen::MatrixXd Ham;
         H.matrix(CI, Ham);
+        auto begin = std::time(nullptr);
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
+        auto end = std::time(nullptr);
         if (Ham.cols() <= 10)
         {
             cout << Ham << endl << endl;
@@ -224,13 +234,62 @@ int main(int argc, char *argv[])
             std::cout << es.eigenvectors() << std::endl;
         }
         cout << "\nGround state" << std::endl;
+        double val = es.eigenvalues()(0);
         cout << "Energy: " << es.eigenvalues()(0) << endl;
         Eigen::VectorXd gs = es.eigenvectors().col(0);
+        Eigen::VectorXd r = Ham * gs - val * gs;
+        cout << "residual: " << r.norm() << endl;
         CI.update(gs);
         Eigen::VectorXd test;
         CI.vector(test);
         cout << test.transpose() * gs << endl;
         CI.trim(1.e-3);
         std::cout << CI << std::endl;
+        std::cout << "total time: " << end - begin << std::endl;
+    }
+
+    {
+        cout << "\n\nCISD with Davidson" << endl;
+        cout << "hf det and energy" << std::endl;
+        Operator::Hamiltonian H;
+        Determinant hf;
+        hf.HartreeFock();
+        cout << H.energy(hf) * hf << endl;
+        CISDVector CI;
+        cout << "size of fock space: " << CI.size() << endl;
+        //cout << "Diagonal" << std::endl;
+        Eigen::VectorXd V;
+        H.diagonal(CI, V);
+        //cout << V.transpose() << endl << endl;
+        cout << "Matrix" << std::endl;
+        Eigen::MatrixXd Ham;
+        H.matrix(CI, Ham);
+        //Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
+        //Ham.diagonal().array() += 0.1;
+        Davidson es;
+        auto begin = std::time(nullptr);
+        int numIter = es.run(Ham);
+        auto end = std::time(nullptr);
+        if (Ham.cols() <= 10)
+        {
+            cout << Ham << endl << endl;
+            cout << "\nEigenproblem Solution" << std::endl;
+            std::cout << es.eigenvalues().transpose() << std::endl << std::endl;
+            std::cout << es.eigenvectors() << std::endl;
+        }
+        cout << "number of iterations: " << numIter << std::endl;
+        double val = es.eigenvalues()(0);
+        cout << "\nGround state" << std::endl;
+        cout << "Energy: " << es.eigenvalues()(0) << endl;
+        Eigen::VectorXd gs = es.eigenvectors().col(0);
+        Eigen::VectorXd r = Ham * gs - val * gs;
+        cout << "residual: " << r.norm() << endl;
+        CI.update(gs);
+        Eigen::VectorXd test;
+        CI.vector(test);
+        cout << test.transpose() * gs << endl;
+        CI.trim(1.e-3);
+        std::cout << CI << std::endl;
+        std::cout << "total time: " << end - begin << std::endl;
     }
 }
