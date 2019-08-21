@@ -292,4 +292,55 @@ int main(int argc, char *argv[])
         std::cout << CI << std::endl;
         std::cout << "total time: " << end - begin << std::endl;
     }
+
+    {
+        cout << "\n\nCISD with direct Davidson" << endl;
+        cout << "hf det and energy" << std::endl;
+        Operator::Hamiltonian H;
+        Determinant hf;
+        hf.HartreeFock();
+        cout << H.energy(hf) * hf << endl;
+        CISDVector CI;
+        cout << "size of fock space: " << CI.size() << endl;
+        //cout << "Diagonal" << std::endl;
+        Eigen::VectorXd V = Eigen::VectorXd::Random(CI.size());
+        //H.diagonal(CI, V);
+        //cout << V.transpose() << endl << endl;
+        Eigen::MatrixXd Ham;
+        H.matrix(CI, Ham);
+        Eigen::VectorXd mult = Ham * V;
+        cout << "Matrix mult" << std::endl;
+        cout << mult.transpose() << endl;
+        cout << "direct mult" << std::endl;
+        Eigen::VectorXd direct = H.multiply(CI, V);
+        cout << direct.transpose() << endl;
+        //Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
+        //Ham.diagonal().array() += 0.1;
+        Davidson es;
+        auto begin = std::time(nullptr);
+        int numIter = es.run(H, CI);
+        auto end = std::time(nullptr);
+        if (Ham.cols() <= 10)
+        {
+            cout << Ham << endl << endl;
+            cout << "\nEigenproblem Solution" << std::endl;
+            std::cout << es.eigenvalues().transpose() << std::endl << std::endl;
+            std::cout << es.eigenvectors() << std::endl;
+        }
+        cout << "number of iterations: " << numIter << std::endl;
+        double val = es.eigenvalues()(0);
+        cout << "\nGround state" << std::endl;
+        cout << "Energy: " << es.eigenvalues()(0) << endl;
+        Eigen::VectorXd gs = es.eigenvectors().col(0);
+        Eigen::VectorXd r = Ham * gs - val * gs;
+        cout << "residual: " << r.norm() << endl;
+        CI.update(gs);
+        Eigen::VectorXd test;
+        CI.vector(test);
+        cout << test.transpose() * gs << endl;
+        CI.trim(1.e-3);
+        std::cout << CI << std::endl;
+        std::cout << "total time: " << end - begin << std::endl;
+
+    }
 }

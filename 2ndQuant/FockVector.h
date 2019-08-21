@@ -1,14 +1,20 @@
 #ifndef FOCKVECTOR_HEADER
 #define FOCKVECTOR_HEADER
 #include "Determinant.h"
-#include <set>
+#include <unordered_set>
 #include <iostream>
 #include <Eigen/Dense>
+
+class Hash
+{
+    public:
+    std::size_t operator()(const Determinant &D) const { return D.key(); }
+};
 
 class FockVector
 {
     protected:
-    std::set<Determinant> Store;
+    std::unordered_set<Determinant, Hash> Store;
 
     public:
     std::size_t size() const { return Store.size(); } //number of determinants in vector
@@ -16,8 +22,8 @@ class FockVector
     auto end() { return Store.end(); } //end iterator
     auto begin() const { return Store.begin(); } //begin const iterator
     auto end() const { return Store.end(); } //end const iterator
-    void insert(const Determinant &D) { Store.emplace(D); } //insert ln(N)
-    void remove(const Determinant &D) { Store.erase(D); } //delete ln(N)
+    void insert(const Determinant &D) { Store.emplace(D); }
+    void remove(const Determinant &D) { Store.erase(D); }
     void clear() { Store.clear(); } //clear vector
     void ones() { for (auto it = begin(); it != end(); ++it) { it->Coeff = 1.0; } } //sets all coefficients to one
     double at(const Determinant &D) const

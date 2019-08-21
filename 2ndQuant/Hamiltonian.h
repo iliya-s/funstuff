@@ -4,7 +4,16 @@
 #include "FockVector.h"
 #include "Integrals.h"
 #include <vector>
+#include <unordered_map>
 #include <Eigen/Dense>
+
+/*
+class HashPair
+{
+    public:
+    std::size_t operator()(const std::pair<Determinant,Determinant> &ij) const { return std::hash<std::size_t>(ij.first.key() * ij.second.key()); } //I think this will clash in a good way
+};
+*/
 
 namespace Operator
 {
@@ -26,6 +35,8 @@ namespace Operator
         std::vector<int> irrep;
         Integral::OneElectron I1;
         Integral::TwoElectron I2;
+        //std::unordered_map<std::pair<Determinant, Determinant>, double, HashPair> Hij;  //hashtable to store diagonal values and singly connected values
+
     
         public:
         Hamiltonian(std::string filename = "FCIDUMP")
@@ -174,7 +185,25 @@ namespace Operator
                 }
             }
             return H;
-        } 
+        }
+        
+        Eigen::VectorXd multiply(const FockVector &CI, const Eigen::VectorXd &z) const
+        {
+            assert(CI.size() == z.rows());
+            Eigen::VectorXd Hz = Eigen::VectorXd::Zero(z.rows());
+            int i = 0;
+            for (auto row = CI.begin(); row != CI.end(); ++row)
+            {
+                int j = 0;
+                for (auto col = CI.begin(); col != CI.end(); ++col)
+                {
+                    Hz(i) += (*this)(*row, *col) * z(j);
+                    j++;
+                }
+                i++;
+            }
+            return Hz;
+        }
     };
 }
 #endif
