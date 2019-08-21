@@ -100,7 +100,6 @@ class Davidson
             SortEig(D, U);
             int index = FindClosest(target, D);
             double theta = D(index);
-        std::cout << theta << std::endl;
             Eigen::VectorXd s = U.col(index);
             Eigen::VectorXd u = V * s;
             Eigen::VectorXd Au = AV * s;
@@ -109,7 +108,6 @@ class Davidson
             Eigen::VectorXd r = Au - theta * u;
             double rNorm = r.norm();
 
-        std::cout << std::abs(theta - old_theta) << std::endl;
             //check for convergence
             if (std::abs(theta - old_theta) < tol)
             {
@@ -196,7 +194,6 @@ class Davidson
             SortEig(D, U);
             int index = FindClosest(target, D);
             double theta = D(index);
-        std::cout << theta << std::endl;
             Eigen::VectorXd s = U.col(index);
             Eigen::VectorXd u = V * s;
             Eigen::VectorXd Au = AV * s;
@@ -206,7 +203,6 @@ class Davidson
             double rNorm = r.norm();
 
             //check for convergence
-        std::cout << std::abs(theta - old_theta) << std::endl;
             if (std::abs(theta - old_theta) < tol)
             {
                 Values(0) = theta;

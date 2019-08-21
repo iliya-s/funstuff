@@ -5,7 +5,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 
-class Hash
+class HashDet
 {
     public:
     std::size_t operator()(const Determinant &D) const { return D.key(); }
@@ -14,7 +14,7 @@ class Hash
 class FockVector
 {
     protected:
-    std::unordered_set<Determinant, Hash> Store;
+    std::unordered_set<Determinant, HashDet> Store;
 
     public:
     std::size_t size() const { return Store.size(); } //number of determinants in vector
@@ -22,8 +22,8 @@ class FockVector
     auto end() { return Store.end(); } //end iterator
     auto begin() const { return Store.begin(); } //begin const iterator
     auto end() const { return Store.end(); } //end const iterator
-    void insert(const Determinant &D) { Store.emplace(D); }
-    void remove(const Determinant &D) { Store.erase(D); }
+    auto insert(const Determinant &D) { return Store.emplace(D); }
+    auto remove(const Determinant &D) { return Store.erase(D); }
     void clear() { Store.clear(); } //clear vector
     void ones() { for (auto it = begin(); it != end(); ++it) { it->Coeff = 1.0; } } //sets all coefficients to one
     double at(const Determinant &D) const
@@ -36,7 +36,7 @@ class FockVector
     double &at(const Determinant &D)
     {
         auto search = Store.find(D);
-        assert(search != end());
+        if (search == end()) { search = insert(D).first; }
         return search->Coeff;
     }
 
@@ -69,7 +69,7 @@ class FockVector
         auto it = begin();
         while (it != end())
         {
-            if (std::abs(it->coeff()) < tol) { Store.erase(it++); }
+            if (std::abs(it->coeff()) <= tol) { Store.erase(it++); }
             else { ++it; }
         } 
     }
@@ -79,10 +79,7 @@ class FockVector
     
 inline std::ostream &operator<<(std::ostream &os, const FockVector &V)
 {
-    for (auto it = V.begin(); it != V.end(); ++it)
-    {
-        std::cout << *it << std::endl;
-    }
+    for (auto it = V.begin(); it != V.end(); ++it) { std::cout << *it << std::endl; }
     return os;
 }
 

@@ -308,12 +308,14 @@ int main(int argc, char *argv[])
         //cout << V.transpose() << endl << endl;
         Eigen::MatrixXd Ham;
         H.matrix(CI, Ham);
+        /*
         Eigen::VectorXd mult = Ham * V;
         cout << "Matrix mult" << std::endl;
         cout << mult.transpose() << endl;
         cout << "direct mult" << std::endl;
         Eigen::VectorXd direct = H.multiply(CI, V);
         cout << direct.transpose() << endl;
+        */
         //Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
         //Ham.diagonal().array() += 0.1;
         Davidson es;
@@ -340,6 +342,7 @@ int main(int argc, char *argv[])
         cout << test.transpose() * gs << endl;
         CI.trim(1.e-3);
         std::cout << CI << std::endl;
+        std::cout << "size of hamiltonian: " << H.size() << endl;
         std::cout << "total time: " << end - begin << std::endl;
 
     }
