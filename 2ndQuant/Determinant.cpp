@@ -171,6 +171,7 @@ bool Determinant::operator<(const Determinant &RHS) const
     //output stream
 std::ostream &operator<<(std::ostream &os, const Determinant &D)
 {
+    std::cout.precision(6);
     os << D.Coeff << " | ";
     for (int i = 0, norb = Determinant::Norb; i < norb; i++)
     {

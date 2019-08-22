@@ -1,15 +1,11 @@
 #ifndef FOCKVECTOR_HEADER
 #define FOCKVECTOR_HEADER
 #include "Determinant.h"
-#include <unordered_set>
 #include <iostream>
+#include <unordered_set>
 #include <Eigen/Dense>
 
-class HashDet
-{
-    public:
-    std::size_t operator()(const Determinant &D) const { return D.key(); }
-};
+struct HashDet { std::size_t operator()(const Determinant &D) const { return D.key(); } };
 
 class FockVector
 {
@@ -69,7 +65,7 @@ class FockVector
         auto it = begin();
         while (it != end())
         {
-            if (std::abs(it->coeff()) <= tol) { Store.erase(it++); }
+            if (std::abs(it->coeff()) < tol) { Store.erase(it++); }
             else { ++it; }
         } 
     }
@@ -118,10 +114,7 @@ class CISDVector: public FockVector
         hf.HartreeFock();
         std::vector<Determinant> dets;
         hf.connected(dets);
-        for (int i = 0; i < dets.size(); i++)
-        {
-            insert(dets[i]);
-        } 
+        for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
         assert(hf.numConnected() == dets.size());
     }
 

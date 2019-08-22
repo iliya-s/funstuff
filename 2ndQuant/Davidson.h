@@ -57,8 +57,8 @@ class Davidson
     Davidson() {}
     Davidson(const Eigen::MatrixXd &A, int _n = 1, int _vmax = 25, int _nrestart = 5) : n{_n}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart); }
 
-    Eigen::VectorXd eigenvalues() const { return Values; }
-    Eigen::MatrixXd eigenvectors() const { return Vectors; }
+    const Eigen::VectorXd &eigenvalues() const { return Values; }
+    const Eigen::MatrixXd &eigenvectors() const { return Vectors; }
 
     int run(const Eigen::MatrixXd &A, int _n = 1, int _vmax = 25, int _nrestart = 5) 
     {
@@ -175,8 +175,8 @@ class Davidson
         int i;
         diag.minCoeff(&i);
         Eigen::VectorXd z = Eigen::VectorXd::Unit(dim, i);
-        //Eigen::VectorXd Az = A * z;
-        Eigen::VectorXd Az = A.multiply(CI, z);
+        Eigen::VectorXd Az;
+        A.multiply(CI, z, Az);
         Eigen::MatrixXd V(z), AV(Az);
 
         double target = z.adjoint() * Az;
@@ -239,8 +239,9 @@ class Davidson
             V.conservativeResize(dim, m + 1);
             AV.conservativeResize(dim, m + 1);
             V.col(m) = delta;
-            //AV.col(m) = A * delta;
-            AV.col(m) = A.multiply(CI, delta);
+            Eigen::VectorXd Hdelta;
+            A.multiply(CI, delta, Hdelta);
+            AV.col(m) = Hdelta;
         }
         //failed
         return -1;

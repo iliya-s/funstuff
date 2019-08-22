@@ -1,8 +1,8 @@
 #ifndef HAMILTONIAN_HEADER
 #define HAMILTONIAN_HEADER
+#include "Integrals.h"
 #include "Determinant.h"
 #include "FockVector.h"
-#include "Integrals.h"
 #include <vector>
 #include <unordered_map>
 #include <Eigen/Dense>
@@ -40,26 +40,20 @@ namespace Operator
             InitDetVars(sz, nelec, norb);
         }
 
-        void clear() const //clears hashtables
-        {
-            Hii.clear();
-            Hia.clear();
-        }
-
+        void clear() const { Hii.clear(); Hia.clear(); } //clears hashtables 
         std::size_t size() const { return Hii.size() + Hia.size(); } //returns size of hashtables
     
         double energy(const Determinant &D) const
         {
             double E = 0.0;
+            //if element has been calculated, extract from hashtable
             auto key = D.key();
-            if (Hii.count(key) == 1) { E = Hii.at(key); } //if element has been calculated, extract from hashtable
+            if (Hii.count(key) == 1) { E = Hii.at(key); }
             else
             {
                 E += core_e;
                 std::array<std::vector<int>, 2> open, closed;
                 D.OpenClosed(open, closed);
-                //assert(Determinant::nalpha() == closed[0].size());
-                //assert(Determinant::nbeta() == closed[1].size());
     
                 //one electron operator
                 for (int sz = 0; sz < 2; sz++) //like spin
@@ -69,6 +63,7 @@ namespace Operator
                         E += I1(closed[sz][i], closed[sz][i]);
                     }
                 }
+
                 //two electron operator
                 for (int sz = 0; sz < 2; sz++) //like spin
                 {
@@ -88,7 +83,9 @@ namespace Operator
                         E += I2(closed[0][a], closed[0][a], closed[1][b], closed[1][b]); //direct
                     }
                 }
-                Hii[key] = E; //add newly calculated element to hashtable
+
+                //add newly calculated element to hashtable
+                Hii[key] = E; 
             }
             return E;
         }
@@ -101,7 +98,8 @@ namespace Operator
             else if (n == 1) //LHS(i -> a) == RHS
             {
                 auto key = LHS.key() * RHS.key();
-                if (Hia.count(key) == 1) { H = Hia.at(key); } //if element has been calculated, extract from hashtable
+                //if element has been calculated, extract from hashtable
+                if (Hia.count(key) == 1) { H = Hia.at(key); }
                 else
                 {
                     int i = 0, a = 0;
@@ -115,10 +113,7 @@ namespace Operator
                     double pa = LHS.parity(orba, sa);
     
                     //one electron operator
-                    if (si == sa) //like spin
-                    {
-                        H += pi * pa * I1(orbi, orba);
-                    }
+                    if (si == sa) { H += pi * pa * I1(orbi, orba); } //like spin
                     //differing spin integral = 0
     
                     //two electron operator
@@ -129,16 +124,11 @@ namespace Operator
                         int sr = closed[r] % 2;  
                         int orbr = closed[r] / 2;
     
-                        if (si == sa) //direct term
-                        {
-                            H += pi * pa * I2(orbi, orba, orbr, orbr);
-                        }
-                        if (si == sr && sa == sr) //exchange term
-                        {
-                            H -= pi * pa * I2(orbi, orbr, orbr, orba);
-                        }
+                        if (si == sa) { H += pi * pa * I2(orbi, orba, orbr, orbr); } //direct term
+                        if (si == sr && sa == sr) { H -= pi * pa * I2(orbi, orbr, orbr, orba); } //exchange term
                     }
-                    Hia[key] = H; //add newly calculated element to hashtable
+                    //add newly calculated element to hashtable
+                    Hia[key] = H;
                 }
             }
             else if (n == 2) //LHS(ij -> ab) == RHS
@@ -161,14 +151,8 @@ namespace Operator
     
                 //one electron operator = 0
                 //two electron operator
-                if (si == sa && sj == sb) //direct
-                {
-                    H += pi * pj * pa * pb * I2(orbi, orba, orbj, orbb);
-                }
-                if (si == sb && sj == sa) //exchange
-                {
-                    H -= pi * pj * pa * pb * I2(orbi, orbb, orbj, orba);
-                }
+                if (si == sa && sj == sb) { H += pi * pj * pa * pb * I2(orbi, orba, orbj, orbb); } //direct
+                if (si == sb && sj == sa) { H -= pi * pj * pa * pb * I2(orbi, orbb, orbj, orba); } //exchange
             }
             return H;
         }
@@ -188,22 +172,22 @@ namespace Operator
         {
             H.setZero(CI.size(), CI.size());
             int i = 0;
-            for (auto it = CI.begin(); it != CI.end(); ++it)
+            for (auto row = CI.begin(); row != CI.end(); ++row)
             {
                 int j = 0;
-                for (auto it1 = CI.begin(); it1 != CI.end(); ++it1)
+                for (auto col = CI.begin(); col != CI.end(); ++col)
                 {
-                    H(i, j) = (*this)(*it, *it1);
+                    H(i, j) = (*this)(*row, *col);
                     j++;
                 }
                 i++;
             }
         }
 
-        Eigen::VectorXd multiply(const FockVector &CI, const Eigen::VectorXd &z) const
+        void multiply(const FockVector &CI, const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
         {
             assert(CI.size() == z.rows());
-            Eigen::VectorXd Hz = Eigen::VectorXd::Zero(z.rows());
+            Hz.setZero(z.rows());
             int i = 0;
             for (auto row = CI.begin(); row != CI.end(); ++row)
             {
@@ -215,8 +199,27 @@ namespace Operator
                 }
                 i++;
             }
+        }    
+
+        /*
+        void multiply(FockVector &CI) const
+        {
+            Eigen::VectorXd Hz = Eigen::VectorXd::Zero(CI.size());
+            int i = 0;
+            for (auto row = CI.begin(); row != CI.end(); ++row)
+            {
+                int j = 0;
+                for (auto col = CI.begin(); col != CI.end(); ++col)
+                {
+                    Hz(i) += (*this)(*row, *col) * CI.at(*col);
+                    j++;
+                }
+                i++;
+            }
+            CI.update(Hz);
             return Hz;
         }    
+        */
  
     };
 }
