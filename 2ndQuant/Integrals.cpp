@@ -40,14 +40,8 @@ void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoEl
             }
             else if (token[0] == "ISYM") { continue; }
             else if (token[0] == "KSYM") { ksym = true; }
-            else if (token[0] == "ORBSYM")
-            {
-                for (int i = 1; (i < token.size() && token[i] != "\0"); i++) { irrep.push_back(std::stoi(token[i])); }
-            }
-            else 
-            {
-                for (int i = 0; (i < token.size() && token[i] != "\0"); i++) { irrep.push_back(std::stoi(token[i])); }
-            }
+            else if (token[0] == "ORBSYM") { for (int i = 1; (i < token.size() && token[i] != "\0"); i++) { irrep.push_back(std::stoi(token[i])); } }
+            else { for (int i = 0; (i < token.size() && token[i] != "\0"); i++) { irrep.push_back(std::stoi(token[i])); } }
         }
     } //while
 

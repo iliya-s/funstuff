@@ -53,7 +53,7 @@ namespace Operator
 
         //application onto Determinant from left and right
         friend Determinant operator*(const Annihilation &a, Determinant D);
-        friend Determinant operator*(const Determinant &D, Annihilation a);
+        friend Determinant operator*(Determinant D, const Annihilation &a);
         //excitation operator
         friend class Excitation;
     };

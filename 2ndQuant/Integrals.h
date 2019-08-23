@@ -21,7 +21,7 @@ namespace Integral
         inline void init(int norb)
         { 
             Norb = norb;
-            Store.resize(Norb * Norb);
+            Store.assign(Norb * Norb, 0.0);
         }
 
         inline double operator() (int i, int j) const { return Store.at(i * Norb + j); }
@@ -33,7 +33,7 @@ namespace Integral
         private:
         friend class boost::serialization::access;
         template <class Archive>
-        void serialize(Archive &ar, const unsigned int version) { ar & Store & Norb; }
+        void serialize(Archive &ar, const unsigned int version) { ar & Ksym & Store & Norb; }
     
         bool Ksym;
         std::vector<double> Store;
@@ -45,11 +45,8 @@ namespace Integral
             Norb = norb;
             Ksym = ksym;
             int npair = Norb * (Norb + 1) / 2;
-            if (Ksym == true)
-            {
-                npair = Norb * Norb;
-            }
-            Store.resize(npair * (npair + 1) / 2);
+            if (Ksym == true) { npair = Norb * Norb; }
+            Store.assign(npair * (npair + 1) / 2, 0.0);
         }
 
         inline double operator() (int i, int j, int k, int l) const
@@ -87,13 +84,13 @@ namespace Integral
     };
 }
 
-void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoElectron &I2, double &core_e, int &Norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);
+void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoElectron &I2, double &core_e, int &norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);
 
-void ReadSquareMatrixIntoOneInt(std::string MatrixFile, int Norb, Integral::OneElectron &I);
+void ReadSquareMatrixIntoOneInt(std::string MatrixFile, int norb, Integral::OneElectron &I);
 
 void ReadMatrix(std::string MatrixFile, int rows, int cols, Eigen::MatrixXd &M);
 
 void WriteMatrix(std::string MatrixFile, const Eigen::MatrixXd &M);
 
-void ReadAtomicOrbitalIntegrals(std::string AOFCIDUMP, std::string METRIC, Integral::OneElectron &AI1, Integral::TwoElectron &AI2, Integral::OneElectron &S, double &core_e, int &Norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);
+void ReadAtomicOrbitalIntegrals(std::string AOFCIDUMP, std::string METRIC, Integral::OneElectron &AI1, Integral::TwoElectron &AI2, Integral::OneElectron &S, double &core_e, int &norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);
 #endif

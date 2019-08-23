@@ -47,10 +47,7 @@ namespace Operator
             Determinant Dcopy(E.a * D);
             return E.a_dag * Dcopy;
         }
-        friend Determinant operator*(const Determinant &D, const Excitation &E)
-        {
-            return E.adjoint() * D;
-        }
+        friend Determinant operator*(const Determinant &D, const Excitation &E) { return E.adjoint() * D; }
     };
 }
 #endif

@@ -264,6 +264,7 @@ int main(int argc, char *argv[])
         cout << "Matrix" << std::endl;
         Eigen::MatrixXd Ham;
         H.matrix(CI, Ham);
+        MatrixMult Mat(H, CI);
         //Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
         //Ham.diagonal().array() += 0.1;
         Davidson es;
@@ -306,9 +307,9 @@ int main(int argc, char *argv[])
         Eigen::VectorXd V = Eigen::VectorXd::Random(CI.size());
         //H.diagonal(CI, V);
         //cout << V.transpose() << endl << endl;
+        /*
         Eigen::MatrixXd Ham;
         H.matrix(CI, Ham);
-        /*
         Eigen::VectorXd mult = Ham * V;
         cout << "Matrix mult" << std::endl;
         cout << mult.transpose() << endl;
@@ -319,22 +320,18 @@ int main(int argc, char *argv[])
         //Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
         //Ham.diagonal().array() += 0.1;
         Davidson es;
+        DirectMatrixMult Mat(H, CI);
         auto begin = std::time(nullptr);
-        int numIter = es.run(H, CI);
+        int numIter = es.run(Mat);
         auto end = std::time(nullptr);
-        if (Ham.cols() <= 10)
-        {
-            cout << Ham << endl << endl;
-            cout << "\nEigenproblem Solution" << std::endl;
-            std::cout << es.eigenvalues().transpose() << std::endl << std::endl;
-            std::cout << es.eigenvectors() << std::endl;
-        }
         cout << "number of iterations: " << numIter << std::endl;
         double val = es.eigenvalues()(0);
         cout << "\nGround state" << std::endl;
         cout << "Energy: " << es.eigenvalues()(0) << endl;
         Eigen::VectorXd gs = es.eigenvectors().col(0);
-        Eigen::VectorXd r = Ham * gs - val * gs;
+        Eigen::VectorXd Hgs;
+        Mat.multiply(gs, Hgs);
+        Eigen::VectorXd r = Hgs - val * gs;
         cout << "residual: " << r.norm() << endl;
         CI.update(gs);
         Eigen::VectorXd test;

@@ -71,8 +71,7 @@ Determinant::~Determinant()
 
 //operators
 
-    //unique key to determinant
-std::size_t Determinant::key() const
+std::size_t Determinant::key() const //unique key to determinant
 {
     std::string str;
     for (int i = 0; i < Len; i++)
@@ -82,8 +81,7 @@ std::size_t Determinant::key() const
     return std::hash<std::string>{}(str);
 }
 
-    //copy/assignment operator
-Determinant &Determinant::operator=(Determinant RHS)
+Determinant &Determinant::operator=(Determinant RHS) //copy/assignment operator
 {
     Coeff = RHS.Coeff;
     for (int i = 0; i < Len; i++)
@@ -94,8 +92,7 @@ Determinant &Determinant::operator=(Determinant RHS)
     return *this;
 }
 
-    //multiplication operator overloaded for overlap = <bra|ket>
-double Determinant::operator*(const Determinant &RHS) const
+double Determinant::operator*(const Determinant &RHS) const //multiplication operator overloaded for overlap = <bra|ket>
 {
     for (int i = 0; i < Len; i++)
     {
@@ -105,46 +102,32 @@ double Determinant::operator*(const Determinant &RHS) const
     return Coeff * RHS.Coeff;
 }
 
-    //multiplication operator overloaded for constants, constant * |ket>, |ket> * constant
-Determinant &Determinant::operator*=(double constant)
+Determinant &Determinant::operator*=(double constant) //multiplication operator overloaded for constants, constant * |ket>, |ket> * constant
 {
     Coeff *= constant;
     return *this;
 }
-Determinant operator*(Determinant D, double constant)
-{
-    return D *= constant;
-}
-Determinant operator*(double constant, Determinant D)
-{
-    return D *= constant;
-}
+Determinant operator*(Determinant D, double constant) { return D *= constant; }
+Determinant operator*(double constant, Determinant D) { return D *= constant; }
 
-    //division operator overloaded for a constant on the right, Determinant / constant
-Determinant &Determinant::operator/=(double constant)
+Determinant &Determinant::operator/=(double constant) //division operator overloaded for a constant on the right, Determinant / constant
 {
     Coeff /= constant;
     return *this;
 }
-Determinant operator/(Determinant D, double constant)
-{
-    return D /= constant;
-}
+Determinant operator/(Determinant D, double constant) { return D /= constant; }
 
-    //equivalence comparison
-bool Determinant::operator==(const Determinant &RHS) const
+bool Determinant::operator==(const Determinant &RHS) const //equivalence comparison
 {
-    if (Coeff != RHS.Coeff)
-        return false;
+    if (Coeff != RHS.Coeff) { return false; }
     for (int i = 0; i < Len; i++)
     {
-        if (String[0][i] != RHS.String[0][i] || String[1][i] != RHS.String[1][i])
-            return false;
+        if (String[0][i] != RHS.String[0][i] || String[1][i] != RHS.String[1][i]) { return false; }
     }
     return true;
 }
 
-bool Determinant::operator<(const Determinant &RHS) const
+bool Determinant::operator<(const Determinant &RHS) const //less than comparison
 {
     bool test = false;
     for (int i = Len - 1; i >= 0; i--)
@@ -154,24 +137,20 @@ bool Determinant::operator<(const Determinant &RHS) const
             test = true;
             break;
         }
-        else if (String[0][i] > RHS.String[0][i])
-            break;
+        else if (String[0][i] > RHS.String[0][i]) { break; }
         
         if (String[1][i] < RHS.String[1][i])
         {
             test = true;
             break;
         }
-        else if (String[1][i] > RHS.String[1][i])
-            break;
+        else if (String[1][i] > RHS.String[1][i]) { break; }
     }
     return test;
 }
 
-    //output stream
-std::ostream &operator<<(std::ostream &os, const Determinant &D)
+std::ostream &operator<<(std::ostream &os, const Determinant &D) //output stream
 {
-    std::cout.precision(6);
     os << D.Coeff << " | ";
     for (int i = 0, norb = Determinant::Norb; i < norb; i++)
     {
@@ -235,27 +214,15 @@ void Determinant::set(int spin_orbital, bool occupancy)
 }
 
 //coefficient getter and setter
-double Determinant::coeff() const
-{
-    return Coeff;
-}
-double &Determinant::coeff()
-{
-    return Coeff;
-}
-void Determinant::coeff(double coefficient)
-{
-    Coeff = coefficient;
-}
+double Determinant::coeff() const { return Coeff; }
+double &Determinant::coeff() { return Coeff; }
+void Determinant::coeff(double coefficient) { Coeff = coefficient; }
 
 //counts occupied spin orbitals in Determinant
 int Determinant::CountSetOrbs() const
 {
     int count = 0;
-    for (int i = 0; i < Len; i++)
-    {
-        count += CountSetBits(String[0][i]) + CountSetBits(String[1][i]);
-    }
+    for (int i = 0; i < Len; i++) { count += CountSetBits(String[0][i]) + CountSetBits(String[1][i]); }
     return count;
 }
 
@@ -267,17 +234,14 @@ int Determinant::CountSetOrbsTo(int orbital, int spin) const
     long index = orbital / 64;
     long bit = orbital % 64;
     int count = 0;
-    for (int i = 0; i < index; i++)
-    {
-        count += CountSetBits(String[0][i]) + CountSetBits(String[1][i]);
-    }
+    for (int i = 0; i < index; i++) { count += CountSetBits(String[0][i]) + CountSetBits(String[1][i]); }
     long alpha, beta;
-    if (spin == 0)  //alpha orbital
+    if (spin == 0) //alpha orbital
     {
         alpha = (1 << bit) - 1;
         beta = alpha;
     }
-    else    //beta orbital
+    else //beta orbital
     {
         alpha = (1 << (bit + 1)) - 1;
         beta = (1 << bit) - 1;
@@ -299,19 +263,15 @@ int Determinant::CountSetOrbsTo(int spin_orbital) const
 double Determinant::parity(int orbital, int spin) const
 {
     int count = CountSetOrbsTo(orbital, spin);
-    if (count % 2 == 0)
-        return 1.0;
-    else
-        return -1.0;
+    if (count % 2 == 0) { return 1.0; }
+    else { return -1.0; }
 }
 
 double Determinant::parity(int spin_orbital) const
 {
     int count = CountSetOrbsTo(spin_orbital);
-    if (count % 2 == 0)
-        return 1.0;
-    else
-        return -1.0;
+    if (count % 2 == 0) { return 1.0; }
+    else { return -1.0; }
 }
     
 //get open and closed orbitals
@@ -357,14 +317,8 @@ void Determinant::read(std::string filename)
 void Determinant::HartreeFock()
 {
     vacuum();
-    for (int i = 0; i < nalpha(); i++)
-    {
-        set(i, 0, true);
-    }
-    for (int i = 0; i < nbeta(); i++)
-    {
-        set(i, 1, true);
-    }
+    for (int i = 0; i < nalpha(); i++) { set(i, 0, true); }
+    for (int i = 0; i < nbeta(); i++) { set(i, 1, true); }
 }
 
 //Vacuum vector, sets all orbitals to unoccupied and the coefficient to 1.0
@@ -396,10 +350,7 @@ int Determinant::numConnected() const
     std::array<std::vector<int>, 2> open, closed;
     OpenClosed(open, closed);
     //single excitations
-    for (int sz = 0; sz < 2; sz++)
-    {
-        num += closed[sz].size() * open[sz].size();
-    }
+    for (int sz = 0; sz < 2; sz++) { num += closed[sz].size() * open[sz].size(); }
 
     //double excitations
     for (int sz = 0; sz < 2; sz++) //like spin
@@ -490,6 +441,41 @@ void Determinant::connected(std::vector<Determinant> &dets) const
             }
         }
     }
+}
+
+//generates all singly connected determinants from a given det, ie single excitations
+int Determinant::numSinglyConnected() const
+{
+    int num = 0;
+    std::array<std::vector<int>, 2> open, closed;
+    OpenClosed(open, closed);
+    //single excitations
+    for (int sz = 0; sz < 2; sz++) { num += closed[sz].size() * open[sz].size(); }
+    return num;
+}
+
+void Determinant::singlyConnected(std::vector<Determinant> &dets) const
+{
+    dets.clear();
+    std::array<std::vector<int>, 2> open, closed;
+    OpenClosed(open, closed);
+
+    //single excitations
+    for (int sz = 0; sz < 2; sz++)
+    {
+        for (int i = 0; i < closed[sz].size(); i++)
+        {
+            for (int a = 0; a < open[sz].size(); a++)
+            {
+                int p = closed[sz][i];
+                int q = open[sz][a];
+                Determinant dexcite(*this);
+                dexcite.set(p, sz, false);
+                dexcite.set(q, sz, true); 
+                dets.push_back(dexcite);
+            }
+        }
+    }    
 }
 
 //calculates the number of different occupied orbitals between two determinants
@@ -643,13 +629,7 @@ void GenerateCombinations(int n, int k, std::vector<std::vector<int>> &combinati
     do
     {
         std::vector<int> comb;
-        for (int i = 0; i < n; ++i)
-        {
-            if (v[i])
-            {
-                comb.push_back(i);
-            }
-        }
+        for (int i = 0; i < n; ++i) { if (v[i]) { comb.push_back(i); } }
         combinations.push_back(comb);
     } while (std::prev_permutation(v.begin(), v.end()));
 }

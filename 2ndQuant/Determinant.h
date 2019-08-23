@@ -27,10 +27,7 @@ class Determinant
     void serialize(Archive &ar, const unsigned int version)
     {
         ar & Coeff;
-        for (int i = 0; i < Len; i++)
-        {
-            ar & String[0][i] & String[1][i];
-        }
+        for (int i = 0; i < Len; i++) { ar & String[0][i] & String[1][i]; }
     }
 
     //initialize determinant static variables
@@ -54,8 +51,7 @@ class Determinant
     ~Determinant();
     
     //operators
-    //copy/assignment operator
-    Determinant &operator=(Determinant RHS);
+    Determinant &operator=(Determinant RHS); //copy/assignment operator
     //multiplication operator overloaded for <bra|ket>, constant * |ket>, |ket> * constant
     double operator*(const Determinant &RHS) const;
     Determinant &operator*=(double constant);
@@ -64,16 +60,12 @@ class Determinant
     //division operator overloaded for Determinant / constant
     Determinant &operator/=(double constant);
     friend Determinant operator/(Determinant D, double constant);
-    //equivalence comparison
-    bool operator==(const Determinant &RHS) const;
-    //less than comparison
-    bool operator<(const Determinant &RHS) const;
-    //output stream
-    friend std::ostream &operator<<(std::ostream &os, const Determinant &D);
+    bool operator==(const Determinant &RHS) const; //equivalence comparison
+    bool operator<(const Determinant &RHS) const; //less than comparison
+    friend std::ostream &operator<<(std::ostream &os, const Determinant &D); //output stream
 
     //functions
-    //unique key to determinant
-    std::size_t key() const;
+    std::size_t key() const; //unique key to determinant
     //spin orbital getter and setter
     bool operator()(int orbital, int spin) const;
     bool operator()(int spin_orbital) const;
@@ -100,26 +92,22 @@ class Determinant
     void write(std::string filename = "Determinant.bkp");
     void read(std::string filename = "Determinant.bkp");
     
-    //hartree fock determinant, sets lowest indexed nalpha and nbeta orbitals to occupied
-    void HartreeFock();
-    //vacuum vector, sets all orbitals to unoccupied and the coefficient to 1.0
-    void vacuum();
-    //zero, sets all orbitals to unoccupied and sets coefficient to 0.0
-    void zero();
+    void HartreeFock(); //hartree fock determinant, sets lowest indexed nalpha and nbeta orbitals to occupied
+    void vacuum(); //vacuum vector, sets all orbitals to unoccupied and the coefficient to 1.0
+    void zero(); //zero, sets all orbitals to unoccupied and sets coefficient to 0.0
     //generates all connected determinants from a given det, ie d + single excitations + double excitations
     int numConnected() const;
     void connected(std::vector<Determinant> &dets) const;
+    //generates all singly connected determinants from a given det, ie single excitations
+    int numSinglyConnected() const;
+    void singlyConnected(std::vector<Determinant> &dets) const;
 
     //friend functions for hamiltonian overlap
     friend class Hamiltonian;
-    //friend object Fock vector
-    friend class FockVector;
-    //calculates the number of different occupied orbitals between two determinants
-    friend int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS);
-    //finds spin orbital indices of differing occupied orbital for two determinants with 1 differing orbital
-    friend void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a);
-    //finds spin orbital indices of differing occupied orbitals for two determinants with 2 differing orbitals occupied
-    friend void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b);
+    friend class FockVector; //friend object Fock vector
+    friend int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS); //calculates the number of different occupied orbitals between two determinants
+    friend void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a); //finds spin orbital indices of differing occupied orbital for two determinants with 1 differing orbital
+    friend void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b); //finds spin orbital indices of differing occupied orbitals for two determinants with 2 differing orbitals occupied
 };
 
 //generates all n choose k combinations of integers and stores them in combinations
