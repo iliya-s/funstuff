@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
     {
         cout << "Hamiltonian" << std::endl;
         cout << "hf det and energy" << std::endl;
-        Operator::Hamiltonian H;
+        Hamiltonian H;
         Determinant hf;
         hf.HartreeFock();
         cout << H.energy(hf) * hf << endl;
@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
 
     {
         cout << "generating connected determinants" << endl;
-        Operator::Hamiltonian H;
+        Hamiltonian H;
         Determinant hf;
         hf.HartreeFock();
         std::vector<Determinant> V;
@@ -210,19 +210,21 @@ int main(int argc, char *argv[])
     {
         cout << "\n\nCISD" << endl;
         cout << "hf det and energy" << std::endl;
-        Operator::Hamiltonian H;
+
+        Hamiltonian H;
         Determinant hf;
         hf.HartreeFock();
         cout << H.energy(hf) * hf << endl;
         CISDVector CI;
+        H.space(CI);
         cout << "size of fock space: " << CI.size() << endl;
         //cout << "Diagonal" << std::endl;
         Eigen::VectorXd V;
-        H.diagonal(CI, V);
+        H.diagonal(V);
         //cout << V.transpose() << endl << endl;
         cout << "Matrix" << std::endl;
         Eigen::MatrixXd Ham;
-        H.matrix(CI, Ham);
+        H.matrix(Ham);
         auto begin = std::time(nullptr);
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
         auto end = std::time(nullptr);
@@ -233,11 +235,13 @@ int main(int argc, char *argv[])
             std::cout << es.eigenvalues().transpose() << std::endl << std::endl;
             std::cout << es.eigenvectors() << std::endl;
         }
-        cout << "\nGround state" << std::endl;
+        cout << "\n" << std::endl;
         double val = es.eigenvalues()(0);
-        cout << "Energy: " << es.eigenvalues()(0) << endl;
+        cout << "Ground state Energy: " << es.eigenvalues()(0) << endl;
         cout << "1st excited state Energy: " << es.eigenvalues()(1) << endl;
         cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
+        cout << "3rd excited state Energy: " << es.eigenvalues()(3) << endl;
+        cout << "4th excited state Energy: " << es.eigenvalues()(4) << endl;
         Eigen::VectorXd gs = es.eigenvectors().col(0);
         Eigen::VectorXd r = Ham * gs - val * gs;
         cout << "residual: " << r.norm() << endl;
@@ -254,7 +258,7 @@ int main(int argc, char *argv[])
     {
         cout << "\n\nCISD with Davidson" << endl;
         cout << "hf det and energy" << std::endl;
-        Operator::Hamiltonian H;
+        Hamiltonian H;
         Determinant hf;
         hf.HartreeFock();
         cout << H.energy(hf) * hf << endl;
@@ -301,14 +305,15 @@ int main(int argc, char *argv[])
     {
         cout << "\n\nCISD with direct Davidson" << endl;
         cout << "hf det and energy" << std::endl;
-        Operator::Hamiltonian H;
+        Hamiltonian H;
         Determinant hf;
         hf.HartreeFock();
         cout << H.energy(hf) * hf << endl;
         CISDVector CI;
+        H.space(CI);
         cout << "size of fock space: " << CI.size() << endl;
         //cout << "Diagonal" << std::endl;
-        Eigen::VectorXd V = Eigen::VectorXd::Random(CI.size());
+        //Eigen::VectorXd V = Eigen::VectorXd::Random(CI.size());
         //H.diagonal(CI, V);
         //cout << V.transpose() << endl << endl;
         /*
@@ -324,19 +329,18 @@ int main(int argc, char *argv[])
         //Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Ham);
         //Ham.diagonal().array() += 0.1;
         Davidson es;
-        DirectMatrixMult Mat(H, CI);
+        //DirectMatrixMult Mat(H);
         auto begin = std::time(nullptr);
-        int numIter = es.run(Mat, 3);
+        int numIter = es.run(H, 2);
         auto end = std::time(nullptr);
         cout << "number of iterations: " << numIter << std::endl;
         double val = es.eigenvalues()(0);
-        cout << "\nGround state" << std::endl;
-        cout << "Energy: " << es.eigenvalues()(0) << endl;
+        cout << "\n" << std::endl;
+        cout << "Ground state Energy: " << es.eigenvalues()(0) << endl;
         cout << "1st excited state Energy: " << es.eigenvalues()(1) << endl;
-        cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
+        //cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
         Eigen::VectorXd gs = es.eigenvectors().col(0);
-        Eigen::VectorXd Hgs;
-        Mat.multiply(gs, Hgs);
+        Eigen::VectorXd Hgs = H * gs;
         Eigen::VectorXd r = Hgs - val * gs;
         cout << "residual: " << r.norm() << endl;
         CI.update(gs);
@@ -350,9 +354,10 @@ int main(int argc, char *argv[])
 
     }
     {
+        /*
         cout << "\n\nFCI with direct Hamiltonian" << std::endl;
         cout << "hf det and energy" << std::endl;
-        Operator::Hamiltonian H;
+        Hamiltonian H;
         Determinant hf;
         hf.HartreeFock();
         cout << H.energy(hf) * hf << endl;
@@ -361,13 +366,13 @@ int main(int argc, char *argv[])
         DirectMatrixMult Mat(H, FCI);
         cout << "size of fock space: " << FCI.size() << endl;
         auto begin = std::time(nullptr);
-        int numIter = es.run(Mat, 3);
+        int numIter = es.run(Mat, 2);
         auto end = std::time(nullptr);
         cout << "number of iterations: " << numIter << std::endl;
         cout << "\nGround state" << std::endl;
         cout << "Energy: " << es.eigenvalues()(0) << endl;
         cout << "1st excited state Energy: " << es.eigenvalues()(1) << endl;
-        cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
+        //cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
         double val = es.eigenvalues()(0);
         Eigen::VectorXd gs = es.eigenvectors().col(0);
         Eigen::VectorXd Hgs;
@@ -382,5 +387,6 @@ int main(int argc, char *argv[])
         FCI.trim(1.e-3);
         std::cout << FCI << std::endl;
         std::cout << "total time: " << end - begin << std::endl;
+        */
     }
 }

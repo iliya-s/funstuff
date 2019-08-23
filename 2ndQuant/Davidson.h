@@ -66,6 +66,7 @@ class AbstractMatrixMult
     virtual int dimension() const = 0;
     virtual void diagonal(Eigen::VectorXd &V) const = 0;
     virtual void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &AV) const = 0;
+    virtual Eigen::VectorXd operator*(const Eigen::VectorXd &V) const = 0;
 };
 
 class MatrixMult : public AbstractMatrixMult
@@ -74,24 +75,25 @@ class MatrixMult : public AbstractMatrixMult
     Eigen::MatrixXd H;
 
     public:
-    MatrixMult(const Operator::Hamiltonian &Ham, const FockVector &V) { Ham.matrix(V, H); }
+    MatrixMult(const Hamiltonian &Ham) { Ham.matrix(H); }
     MatrixMult(const Eigen::MatrixXd &Ham) : H{Ham} { assert(Ham.rows() == Ham.cols()); }
     int dimension() const { return H.rows(); }
     void diagonal(Eigen::VectorXd &V) const { V = H.diagonal(); }
     void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { HV = H * V; }
+    Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
 };
 
 class DirectMatrixMult : public AbstractMatrixMult
 {
     private:
-    const Operator::Hamiltonian &H;
-    const FockVector &CI;
+    const Hamiltonian &H;
 
     public:
-    DirectMatrixMult(const Operator::Hamiltonian &Ham, const FockVector &V) : H{Ham}, CI{V} {}
-    int dimension() const { return CI.size(); }
-    void diagonal(Eigen::VectorXd &V) const { H.diagonal(CI, V); }
-    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { H.multiply(CI, V, HV); }
+    DirectMatrixMult(const Hamiltonian &Ham) : H{Ham} {}
+    int dimension() const { return H.dimension(); }
+    void diagonal(Eigen::VectorXd &V) const { H.diagonal(V); }
+    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { H.multiply(V, HV); }
+    Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
 };
 
 class Davidson
@@ -104,25 +106,25 @@ class Davidson
 
     public:
     Davidson() {}
-    Davidson(const Eigen::MatrixXd &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-8) : n{_n}, vmax{_vmax}, nrestart{_nrestart}, tol{_tol} { run(A, n, vmax, nrestart, tol); }
-    Davidson(const AbstractMatrixMult &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-8) : n{_n}, vmax{_vmax}, nrestart{_nrestart}, tol{_tol} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const Eigen::MatrixXd &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) : n{_n}, vmax{_vmax}, nrestart{_nrestart}, tol{_tol} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const AbstractMatrixMult &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) : n{_n}, vmax{_vmax}, nrestart{_nrestart}, tol{_tol} { run(A, n, vmax, nrestart, tol); }
 
     const Eigen::VectorXd &eigenvalues() const { return Values; }
     const Eigen::MatrixXd &eigenvectors() const { return Vectors; }
 
-    int run(const Eigen::MatrixXd &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-8) 
+    int run(const Eigen::MatrixXd &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) 
     {
         MatrixMult Mat(A);
         return run(Mat, _n, _vmax, _nrestart, _tol);
     }
 
-    int run(const Operator::Hamiltonian &H, const FockVector &CI, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-8) 
+    int run(const Hamiltonian &H, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) 
     {
-        DirectMatrixMult Mat(H, CI);
+        DirectMatrixMult Mat(H);
         return run(Mat, _n, _vmax, _nrestart, _tol);
     }
 
-    int run(const AbstractMatrixMult &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-8) 
+    int run(const AbstractMatrixMult &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) 
     {
         n = _n;
         vmax = _vmax;
@@ -152,8 +154,7 @@ class Davidson
             int index;
             diagcopy.minCoeff(&index);
             Eigen::VectorXd z = Eigen::VectorXd::Unit(dim, index);
-            Eigen::VectorXd Az = Eigen::VectorXd::Zero(dim);
-            //Az(index) = diagcopy(index);
+            Eigen::VectorXd Az;
             A.multiply(z, Az);
             V.col(i) = z;
             AV.col(i) = Az;

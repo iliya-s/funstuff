@@ -36,6 +36,8 @@ class FockVector
         if (search == end()) { search = insert(D).first; }
         return search->Coeff;
     }
+    double operator()(const Determinant &D) const { return at(D); }
+    double &operator()(const Determinant &D) { return at(D); }
 
     void update(const Eigen::VectorXd &V)
     {
@@ -43,8 +45,9 @@ class FockVector
         int i = 0;
         for (auto it = begin(); it != end(); ++it)
         {
-            if (std::abs(V(i)) < 1.e-8) { it->Coeff = 0.0; }
-            else { it->Coeff = V(i); }
+            //if (std::abs(V(i)) < 1.e-8) { it->Coeff = 0.0; }
+            //else { it->Coeff = V(i); }
+            it->Coeff = V(i);
             i++;
         }
     }
@@ -55,8 +58,9 @@ class FockVector
         int i = 0;
         for (auto it = begin(); it != end(); ++it)
         {
-            double val = it->coeff();
-            if (std::abs(val) > 1.e-8) { V(i) = val; }
+            //double val = it->coeff();
+            //if (std::abs(val) > 1.e-8) { V(i) = val; }
+            V(i) = it->coeff();
             i++;
         } 
     }
@@ -99,9 +103,6 @@ class FCIVector: public FockVector
         }
         assert(size() == alpha.size() * beta.size());
     }
-
-    double operator()(const Determinant &D) const { return at(D); }
-    double &operator()(const Determinant &D) { return at(D); }
 };
 
 class CISDVector: public FockVector
@@ -118,8 +119,5 @@ class CISDVector: public FockVector
         for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
         assert(hf.numConnected() == dets.size());
     }
-
-    double operator()(const Determinant &D) const { return at(D); }
-    double &operator()(const Determinant &D) { return at(D); }
 };
 #endif
