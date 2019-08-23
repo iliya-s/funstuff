@@ -236,6 +236,8 @@ int main(int argc, char *argv[])
         cout << "\nGround state" << std::endl;
         double val = es.eigenvalues()(0);
         cout << "Energy: " << es.eigenvalues()(0) << endl;
+        cout << "1st excited state Energy: " << es.eigenvalues()(1) << endl;
+        cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
         Eigen::VectorXd gs = es.eigenvectors().col(0);
         Eigen::VectorXd r = Ham * gs - val * gs;
         cout << "residual: " << r.norm() << endl;
@@ -248,6 +250,7 @@ int main(int argc, char *argv[])
         std::cout << "total time: " << end - begin << std::endl;
     }
 
+    /*
     {
         cout << "\n\nCISD with Davidson" << endl;
         cout << "hf det and energy" << std::endl;
@@ -293,6 +296,7 @@ int main(int argc, char *argv[])
         std::cout << CI << std::endl;
         std::cout << "total time: " << end - begin << std::endl;
     }
+    */
 
     {
         cout << "\n\nCISD with direct Davidson" << endl;
@@ -322,12 +326,14 @@ int main(int argc, char *argv[])
         Davidson es;
         DirectMatrixMult Mat(H, CI);
         auto begin = std::time(nullptr);
-        int numIter = es.run(Mat);
+        int numIter = es.run(Mat, 3);
         auto end = std::time(nullptr);
         cout << "number of iterations: " << numIter << std::endl;
         double val = es.eigenvalues()(0);
         cout << "\nGround state" << std::endl;
         cout << "Energy: " << es.eigenvalues()(0) << endl;
+        cout << "1st excited state Energy: " << es.eigenvalues()(1) << endl;
+        cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
         Eigen::VectorXd gs = es.eigenvectors().col(0);
         Eigen::VectorXd Hgs;
         Mat.multiply(gs, Hgs);
@@ -337,10 +343,44 @@ int main(int argc, char *argv[])
         Eigen::VectorXd test;
         CI.vector(test);
         cout << test.transpose() * gs << endl;
+        std::cout << "Compactness of Hamiltonian: " << ((double)H.size() / (double)(CI.size() * CI.size())) << endl;
         CI.trim(1.e-3);
         std::cout << CI << std::endl;
-        std::cout << "size of hamiltonian: " << H.size() << endl;
         std::cout << "total time: " << end - begin << std::endl;
 
+    }
+    {
+        cout << "\n\nFCI with direct Hamiltonian" << std::endl;
+        cout << "hf det and energy" << std::endl;
+        Operator::Hamiltonian H;
+        Determinant hf;
+        hf.HartreeFock();
+        cout << H.energy(hf) * hf << endl;
+        Davidson es;
+        FCIVector FCI;
+        DirectMatrixMult Mat(H, FCI);
+        cout << "size of fock space: " << FCI.size() << endl;
+        auto begin = std::time(nullptr);
+        int numIter = es.run(Mat, 3);
+        auto end = std::time(nullptr);
+        cout << "number of iterations: " << numIter << std::endl;
+        cout << "\nGround state" << std::endl;
+        cout << "Energy: " << es.eigenvalues()(0) << endl;
+        cout << "1st excited state Energy: " << es.eigenvalues()(1) << endl;
+        cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
+        double val = es.eigenvalues()(0);
+        Eigen::VectorXd gs = es.eigenvectors().col(0);
+        Eigen::VectorXd Hgs;
+        Mat.multiply(gs, Hgs);
+        Eigen::VectorXd r = Hgs - val * gs;
+        cout << "residual: " << r.norm() << endl;
+        FCI.update(gs);
+        Eigen::VectorXd test;
+        FCI.vector(test);
+        cout << test.transpose() * gs << endl;
+        std::cout << "Compactness of Hamiltonian: " << ((double)H.size() / (double)(FCI.size() * FCI.size())) << endl;
+        FCI.trim(1.e-3);
+        std::cout << FCI << std::endl;
+        std::cout << "total time: " << end - begin << std::endl;
     }
 }

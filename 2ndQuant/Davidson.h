@@ -138,83 +138,101 @@ class Davidson
             vmax = dim;
             int a = 0.1 * dim;
             nrestart = a > 1 ? a : 1;
+            assert(n < dim);
         }
         //make room for solution
         Vectors.setZero(dim, n);
         Values.setZero(n);
 
         //initalize vector and subspace
-        int i;
-        diag.minCoeff(&i);
-        Eigen::VectorXd z = Eigen::VectorXd::Unit(dim, i);
-        Eigen::VectorXd Az;
-        A.multiply(z, Az);
-        Eigen::MatrixXd V(z), AV(Az);
+        Eigen::MatrixXd V(dim, n), AV(dim, n);
+        Eigen::VectorXd diagcopy(diag);
+        for (int i = 0; i < n; i++)
+        {
+            int index;
+            diagcopy.minCoeff(&index);
+            Eigen::VectorXd z = Eigen::VectorXd::Unit(dim, index);
+            Eigen::VectorXd Az = Eigen::VectorXd::Zero(dim);
+            //Az(index) = diagcopy(index);
+            A.multiply(z, Az);
+            V.col(i) = z;
+            AV.col(i) = Az;
+            diagcopy(index) = 1000000;
+        }
+        double target = V.col(0).adjoint() * AV.col(0); //target will always be ground state
 
-        double target = z.adjoint() * Az;
-        double old_theta = 1000000;
+        Eigen::VectorXd old_Theta = Eigen::VectorXd::Constant(n, 1000000);
         double old_rNorm = 1000000;
         for (int iter = 1; iter <= 1000; iter++)
         {    
+            //std::cout << iter << std::endl;
             //subspace problem
+            int subdim = V.cols(); //dimension of subspace
             Eigen::MatrixXd Aprime = V.adjoint() * AV;
             Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Aprime);
             Eigen::VectorXd D = es.eigenvalues();
-            Eigen::MatrixXd U = es.eigenvectors();
+            Eigen::MatrixXd S = es.eigenvectors();
 
             //sort solution and extract answer
-            SortEig(D, U);
-            //int index = FindClosest(target, D);
-            int index = FindLower(target, D);
-            double theta = D(index);
-            Eigen::VectorXd s = U.col(index);
-            Eigen::VectorXd u = V * s;
-            Eigen::VectorXd Au = AV * s;
+            SortEig(D, S);
+            int index = FindClosest(target, D);
+            //int index = FindLower(target, D);
+            //int index = 0;
+            
+            Eigen::VectorXd Theta = D.segment(index, n);
+            Eigen::MatrixXd U = V * S.block(0, index, subdim, n);
+            Eigen::MatrixXd AU = AV * S.block(0, index, subdim, n);
+            Eigen::MatrixXd Delta = Eigen::MatrixXd::Zero(dim, n);
+            Eigen::MatrixXd HDelta = Eigen::MatrixXd::Zero(dim, n);
 
-            //residual
-            Eigen::VectorXd r = Au - theta * u;
-            double rNorm = r.norm();
+            for (int i = 0; i < n; i++)
+            {
+                //residual
+                Eigen::VectorXd r = AU.col(i) - Theta(i) * U.col(i);
+
+                if (i == 0) //target will always be ground state
+                {
+                    //update target
+                    double rNorm = r.norm();
+                    if (rNorm < old_rNorm)
+                    {
+                        target = Theta(i);
+                        old_rNorm = rNorm;
+                    }
+                }
+                
+                //calculate correction
+                Eigen::VectorXd delta(dim);
+                for (int l = 0; l < delta.rows(); l++) { delta(l) = - r(l) / (diag(l) - Theta(i) + 1.e-8); }
+                OrthonormalizeVectorToSubspace(delta, V);
+                Eigen::VectorXd Hdelta;
+                A.multiply(delta, Hdelta);
+                Delta.col(i) = delta;
+                HDelta.col(i) = Hdelta;
+            }
+
+            //grow subspace and append vectors
+            V.conservativeResize(dim, subdim + n);
+            AV.conservativeResize(dim, subdim + n);
+            V.block(0, subdim, dim, n) = Delta;
+            AV.block(0, subdim, dim, n) = HDelta;
 
             //check for convergence
-            if (std::abs(theta - old_theta) < tol)
+            if ((Theta - old_Theta).squaredNorm() < tol)
             {
-                Values(0) = theta;
-                Vectors.col(0) = u;
+                Values = Theta;
+                Vectors = U;
                 return iter;
             }
-            old_theta = theta;
+            old_Theta = Theta;
 
             //restart
             if (V.cols() >= vmax)
             {
-                Eigen::MatrixXd N = U.block(0, index, U.rows(), nrestart);
+                Eigen::MatrixXd N = U.block(0, index, dim, nrestart);
                 V = V * N;
                 AV = AV * N;
             }
-
-            //update target
-            if (rNorm < old_rNorm)
-            {
-                target = theta;
-                old_rNorm = rNorm;
-            }
-
-            //calculate correction
-            Eigen::VectorXd delta(r.rows());
-            for (int l = 0; l < delta.rows(); l++)
-            {
-                delta(l) = r(l) / (diag(l) - theta + 1.e-8);
-            }
-            OrthonormalizeVectorToSubspace(delta, V);
-
-            //append vector to subspace
-            int m = V.cols();
-            V.conservativeResize(dim, m + 1);
-            AV.conservativeResize(dim, m + 1);
-            V.col(m) = delta;
-            Eigen::VectorXd Hdelta;
-            A.multiply(delta, Hdelta);
-            AV.col(m) = Hdelta;
         }
         //failed
         return -1;

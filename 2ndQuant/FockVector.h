@@ -13,6 +13,7 @@ class FockVector
     std::unordered_set<Determinant, HashDet> Store;
 
     public:
+    FockVector() {}
     std::size_t size() const { return Store.size(); } //number of determinants in vector
     auto begin() { return Store.begin(); } //begin iterator
     auto end() { return Store.end(); } //end iterator
