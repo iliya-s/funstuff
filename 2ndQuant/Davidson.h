@@ -106,25 +106,25 @@ class Davidson
 
     public:
     Davidson() {}
-    Davidson(const Eigen::MatrixXd &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) : n{_n}, vmax{_vmax}, nrestart{_nrestart}, tol{_tol} { run(A, n, vmax, nrestart, tol); }
-    Davidson(const AbstractMatrixMult &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) : n{_n}, vmax{_vmax}, nrestart{_nrestart}, tol{_tol} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
 
     const Eigen::VectorXd &eigenvalues() const { return Values; }
     const Eigen::MatrixXd &eigenvectors() const { return Vectors; }
 
-    int run(const Eigen::MatrixXd &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) 
+    int run(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) 
     {
         MatrixMult Mat(A);
-        return run(Mat, _n, _vmax, _nrestart, _tol);
+        return run(Mat, _n, _tol, _vmax, _nrestart);
     }
 
-    int run(const Hamiltonian &H, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) 
+    int run(const Hamiltonian &H, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) 
     {
         DirectMatrixMult Mat(H);
-        return run(Mat, _n, _vmax, _nrestart, _tol);
+        return run(Mat, _n, _tol, _vmax, _nrestart);
     }
 
-    int run(const AbstractMatrixMult &A, int _n = 1, int _vmax = 25, int _nrestart = 5, double _tol = 1.e-10) 
+    int run(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) 
     {
         n = _n;
         vmax = _vmax;
@@ -138,8 +138,7 @@ class Davidson
         if (dim < vmax)
         {
             vmax = dim;
-            int a = 0.1 * dim;
-            nrestart = a > 1 ? a : 1;
+            nrestart = n;
             assert(n < dim);
         }
         //make room for solution
@@ -164,9 +163,9 @@ class Davidson
 
         Eigen::VectorXd old_Theta = Eigen::VectorXd::Constant(n, 1000000);
         double old_rNorm = 1000000;
-        for (int iter = 1; iter <= 1000; iter++)
+        for (int iter = 1; iter <= 50; iter++)
         {    
-            //std::cout << iter << std::endl;
+        //std::cout << iter << std::endl;
             //subspace problem
             int subdim = V.cols(); //dimension of subspace
             Eigen::MatrixXd Aprime = V.adjoint() * AV;
@@ -176,11 +175,22 @@ class Davidson
 
             //sort solution and extract answer
             SortEig(D, S);
-            int index = FindClosest(target, D);
+            //int index = FindClosest(target, D);
             //int index = FindLower(target, D);
-            //int index = 0;
+            int index = 0;
+
+            //restart
+            if (V.cols() >= vmax)
+            {
+        //std::cout << "restart" << std::endl;
+                Eigen::MatrixXd N = S.block(0, index, subdim, nrestart);
+                V = V * N;
+                AV = AV * N;
+                continue;
+            }
             
             Eigen::VectorXd Theta = D.segment(index, n);
+        //std::cout << Theta.transpose() << std::endl;
             Eigen::MatrixXd U = V * S.block(0, index, subdim, n);
             Eigen::MatrixXd AU = AV * S.block(0, index, subdim, n);
             Eigen::MatrixXd Delta = Eigen::MatrixXd::Zero(dim, n);
@@ -204,7 +214,7 @@ class Davidson
                 
                 //calculate correction
                 Eigen::VectorXd delta(dim);
-                for (int l = 0; l < delta.rows(); l++) { delta(l) = - r(l) / (diag(l) - Theta(i) + 1.e-8); }
+                for (int l = 0; l < delta.rows(); l++) { delta(l) = - r(l) / (diag(l) - Theta(i) + 1.e-10); }
                 OrthonormalizeVectorToSubspace(delta, V);
                 Eigen::VectorXd Hdelta;
                 A.multiply(delta, Hdelta);
@@ -219,6 +229,7 @@ class Davidson
             AV.block(0, subdim, dim, n) = HDelta;
 
             //check for convergence
+        //std::cout << (Theta - old_Theta).squaredNorm() << std::endl;
             if ((Theta - old_Theta).squaredNorm() < tol)
             {
                 Values = Theta;
@@ -227,13 +238,6 @@ class Davidson
             }
             old_Theta = Theta;
 
-            //restart
-            if (V.cols() >= vmax)
-            {
-                Eigen::MatrixXd N = U.block(0, index, dim, nrestart);
-                V = V * N;
-                AV = AV * N;
-            }
         }
         //failed
         return -1;

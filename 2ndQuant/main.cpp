@@ -331,14 +331,15 @@ int main(int argc, char *argv[])
         Davidson es;
         //DirectMatrixMult Mat(H);
         auto begin = std::time(nullptr);
-        int numIter = es.run(H, 2);
+        int numIter = es.run(H, 4, 1.e-1);
         auto end = std::time(nullptr);
         cout << "number of iterations: " << numIter << std::endl;
         double val = es.eigenvalues()(0);
         cout << "\n" << std::endl;
         cout << "Ground state Energy: " << es.eigenvalues()(0) << endl;
         cout << "1st excited state Energy: " << es.eigenvalues()(1) << endl;
-        //cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
+        cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
+        cout << "3rd excited state Energy: " << es.eigenvalues()(3) << endl;
         Eigen::VectorXd gs = es.eigenvectors().col(0);
         Eigen::VectorXd Hgs = H * gs;
         Eigen::VectorXd r = Hgs - val * gs;
