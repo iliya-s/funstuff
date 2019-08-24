@@ -92,7 +92,7 @@ class DirectMatrixMult : public AbstractMatrixMult
     DirectMatrixMult(const Hamiltonian &Ham) : H{Ham} {}
     int dimension() const { return H.dimension(); }
     void diagonal(Eigen::VectorXd &V) const { H.diagonal(V); }
-    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { H.multiply(V, HV); }
+    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { H.Fmultiply(V, HV); }
     Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
 };
 
@@ -214,7 +214,7 @@ class Davidson
                 
                 //calculate correction
                 Eigen::VectorXd delta(dim);
-                for (int l = 0; l < delta.rows(); l++) { delta(l) = - r(l) / (diag(l) - Theta(i) + 1.e-10); }
+                for (int l = 0; l < delta.rows(); l++) { delta(l) = - r(l) / (diag(l) - Theta(i) + 1.e-12); }
                 OrthonormalizeVectorToSubspace(delta, V);
                 Eigen::VectorXd Hdelta;
                 A.multiply(delta, Hdelta);

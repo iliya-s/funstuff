@@ -2,15 +2,16 @@
 #define FOCKVECTOR_HEADER
 #include "Determinant.h"
 #include <iostream>
-#include <unordered_set>
+#include <unordered_map>
 #include <Eigen/Dense>
 
 struct HashDet { std::size_t operator()(const Determinant &D) const { return D.key(); } };
+struct HashKey { std::size_t operator()(const std::size_t &key) const { return key; } };
 
 class FockVector
 {
     protected:
-    std::unordered_set<Determinant, HashDet> Store;
+    std::unordered_map<std::size_t, Determinant, HashKey> Store;
 
     public:
     FockVector() {}
@@ -19,25 +20,29 @@ class FockVector
     auto end() { return Store.end(); } //end iterator
     auto begin() const { return Store.begin(); } //begin const iterator
     auto end() const { return Store.end(); } //end const iterator
-    auto insert(const Determinant &D) { return Store.emplace(D); }
-    auto remove(const Determinant &D) { return Store.erase(D); }
+    auto insert(const Determinant &D) { return Store.emplace(D.key(), D); }
+    auto remove(const Determinant &D) { return Store.erase(D.key()); }
     void clear() { Store.clear(); } //clear vector
-    void ones() { for (auto it = begin(); it != end(); ++it) { it->Coeff = 1.0; } } //sets all coefficients to one
+    void ones() { for (auto it = begin(); it != end(); ++it) { it->second.coeff(1.0); } } //sets all coefficients to one
     double at(const Determinant &D) const
     {
         double val = 0.0;
-        auto search = Store.find(D);
-        if (search != end()) { val = search->coeff(); }
+        //auto search = Store.find(D);
+        if (Store.count(D.key()) == 1) { val = Store.at(D.key()).coeff(); }
+
         return val;
     }
+    /*
     double &at(const Determinant &D)
     {
+        std::cout << "i" << std::endl;
         auto search = Store.find(D);
         if (search == end()) { search = insert(D).first; }
         return search->Coeff;
     }
+    */
     double operator()(const Determinant &D) const { return at(D); }
-    double &operator()(const Determinant &D) { return at(D); }
+    //double &operator()(const Determinant &D) { return at(D); }
 
     void update(const Eigen::VectorXd &V)
     {
@@ -47,7 +52,7 @@ class FockVector
         {
             //if (std::abs(V(i)) < 1.e-8) { it->Coeff = 0.0; }
             //else { it->Coeff = V(i); }
-            it->Coeff = V(i);
+            it->second.coeff(V(i));
             i++;
         }
     }
@@ -60,7 +65,7 @@ class FockVector
         {
             //double val = it->coeff();
             //if (std::abs(val) > 1.e-8) { V(i) = val; }
-            V(i) = it->coeff();
+            V(i) = it->second.coeff();
             i++;
         } 
     }
@@ -70,7 +75,7 @@ class FockVector
         auto it = begin();
         while (it != end())
         {
-            if (std::abs(it->coeff()) < tol) { Store.erase(it++); }
+            if (std::abs(it->second.coeff()) < tol) { Store.erase(it++); }
             else { ++it; }
         } 
     }
@@ -80,7 +85,7 @@ class FockVector
     
 inline std::ostream &operator<<(std::ostream &os, const FockVector &V)
 {
-    for (auto it = V.begin(); it != V.end(); ++it) { std::cout << *it << std::endl; }
+    for (auto it = V.begin(); it != V.end(); ++it) { std::cout << it->second << std::endl; }
     return os;
 }
 
@@ -98,7 +103,8 @@ class FCIVector: public FockVector
         {
             for (int j = 0; j < beta.size(); j++)
             {
-                Store.emplace(Determinant(alpha[i], beta[j]));
+                Determinant det(alpha[i], beta[j]);
+                Store.emplace(det.key(), det);
             }
         }
         assert(size() == alpha.size() * beta.size());

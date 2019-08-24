@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <Eigen/Dense>
 
-struct HashKey { std::size_t operator()(const std::size_t &key) const { return key; } };
+//struct HashKey { std::size_t operator()(const std::size_t &key) const { return key; } };
 
 class Hamiltonian
 {
@@ -21,6 +21,7 @@ class Hamiltonian
         ar & irrep;
         ar & I1 & I2;
         ar & Hii & Hia;
+        ar & V;
     }
 
     double core_e;
@@ -42,15 +43,14 @@ class Hamiltonian
     void clear() const { Hii.clear(); Hia.clear(); } //clears hashtables 
     std::size_t size() const { return Hii.size() + Hia.size(); } //returns size of hashtables
 
-    std::size_t dimension() const { return V->size(); } //returns size of variational space
+    std::size_t dimension() const { return V->size(); } //returns dimension of variational space
     void space(const FockVector &CI) { V = std::make_unique<FockVector>(CI); }
 
     double energy(const Determinant &D) const
     {
         double E = 0.0;
-        //if element has been calculated, extract from hashtable
         auto key = D.key();
-        if (Hii.count(key) == 1) { E = Hii.at(key); }
+        if (Hii.count(key) == 1) { E = Hii.at(key); } //if element has been calculated, extract from hashtable
         else
         {
             E += core_e;
@@ -86,8 +86,7 @@ class Hamiltonian
                 }
             }
 
-            //add newly calculated element to hashtable
-            Hii[key] = E; 
+            Hii[key] = E; //add newly calculated element to hashtable
         }
         return E;
     }
@@ -100,8 +99,7 @@ class Hamiltonian
         else if (n == 1) //LHS(i -> a) == RHS
         {
             auto key = LHS.key() * RHS.key();
-            //if element has been calculated, extract from hashtable
-            if (Hia.count(key) == 1) { H = Hia.at(key); }
+            if (Hia.count(key) == 1) { H = Hia.at(key); } //if element has been calculated, extract from hashtable
             else
             {
                 int i = 0, a = 0;
@@ -165,7 +163,7 @@ class Hamiltonian
         int i = 0;
         for (auto it = V->begin(); it != V->end(); ++it)
         {
-            CI(i) = energy(*it);
+            CI(i) = energy(it->second);
             i++;
         }
     }
@@ -179,7 +177,7 @@ class Hamiltonian
             int j = 0;
             for (auto col = V->begin(); col != V->end(); ++col)
             {
-                H(i, j) = (*this)(*row, *col);
+                H(i, j) = (*this)(row->second, col->second);
                 j++;
             }
             i++;
@@ -196,11 +194,33 @@ class Hamiltonian
             int j = 0;
             for (auto col = V->begin(); col != V->end(); ++col)
             {
-                Hz(i) += (*this)(*row, *col) * z(j);
+                Hz(i) += (*this)(row->second, col->second) * z(j);
                 j++;
             }
             i++;
         }
+    }    
+
+    void Fmultiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
+    {
+        assert(V->size() == z.rows());
+        V->update(z);
+        Hz.setZero(z.rows());
+        int i = 0;
+        for (auto row = V->begin(); row != V->end(); ++row)
+        {
+            int j = 0;
+            std::vector<Determinant> dets;
+            row->second.connected(dets);
+            for (auto col = dets.begin(); col != dets.end(); ++col)
+            {
+                double val = V->at(*col);
+                if (val != 0.0) { Hz(i) += (*this)(row->second, *col) * val; }
+                j++;
+            }
+            i++;
+        }
+        V->ones();
     }    
 
     Eigen::VectorXd operator*(const Eigen::VectorXd &z) const
@@ -213,7 +233,7 @@ class Hamiltonian
             int j = 0;
             for (auto col = V->begin(); col != V->end(); ++col)
             {
-                Hz(i) += (*this)(*row, *col) * z(j);
+                Hz(i) += (*this)(row->second, col->second) * z(j);
                 j++;
             }
             i++;
