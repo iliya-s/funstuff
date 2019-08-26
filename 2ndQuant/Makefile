@@ -1,5 +1,7 @@
 USE_MPI = no
 USE_INTEL = yes
+OPT = -O3
+
 #BOOST = /home/iliya/apps/boost/boost_1_68_0
 #EIGEN = /home/iliya/apps/eigen/eigen-eigen-b3f3d4950030
 EIGEN = /home/iliya/Desktop/projects/apps/eigen-eigen-323c052e1731

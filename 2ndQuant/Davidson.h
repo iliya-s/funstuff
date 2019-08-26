@@ -109,26 +109,26 @@ class Davidson
 
     public:
     Davidson() {}
-    Davidson(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
-    Davidson(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
 
     const Eigen::VectorXd &eigenvalues() const { return Values; }
     const Eigen::MatrixXd &eigenvectors() const { return Vectors; }
 
-    int run(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) 
+    int run(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) 
     {
         MatrixMult Mat(A);
         return run(Mat, _n, _tol, _vmax, _nrestart);
     }
 
-    int run(const Hamiltonian &H, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) 
+    int run(const Hamiltonian &H, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) 
     {
         //assert()
         DirectMatrixMult Mat(H);
         return run(Mat, _n, _tol, _vmax, _nrestart);
     }
 
-    int run(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) 
+    int run(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) 
     {
         n = _n;
         vmax = _vmax;
