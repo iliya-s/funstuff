@@ -65,8 +65,8 @@ class AbstractMatrixMult
     public:
     virtual int dimension() const = 0;
     virtual void diagonal(Eigen::VectorXd &V) const = 0;
-    virtual void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &AV) const = 0;
     virtual void matrix(Eigen::MatrixXd &A) const = 0;
+    virtual void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &AV) const = 0;
     //virtual Eigen::VectorXd operator*(const Eigen::VectorXd &V) const = 0;
 };
 
@@ -80,8 +80,8 @@ class MatrixMult : public AbstractMatrixMult
     MatrixMult(const Eigen::MatrixXd &Ham) : H{Ham} { assert(Ham.rows() == Ham.cols()); }
     int dimension() const { return H.rows(); }
     void diagonal(Eigen::VectorXd &V) const { V = H.diagonal(); }
-    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { HV = H * V; }
     void matrix(Eigen::MatrixXd &A) const { A = H; }
+    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { HV = H * V; }
     //Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
 };
 
@@ -94,8 +94,8 @@ class DirectMatrixMult : public AbstractMatrixMult
     DirectMatrixMult(const Hamiltonian &Ham) : H{Ham} {}
     int dimension() const { return H.dimension(); }
     void diagonal(Eigen::VectorXd &V) const { H.diagonal(V); }
-    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { H.multiply(V, HV); }
     void matrix(Eigen::MatrixXd &A) const { H.matrix(A); }
+    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { H.multiply(V, HV); }
     //Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
 };
 
