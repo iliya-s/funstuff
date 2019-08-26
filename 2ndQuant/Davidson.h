@@ -66,7 +66,8 @@ class AbstractMatrixMult
     virtual int dimension() const = 0;
     virtual void diagonal(Eigen::VectorXd &V) const = 0;
     virtual void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &AV) const = 0;
-    virtual Eigen::VectorXd operator*(const Eigen::VectorXd &V) const = 0;
+    virtual void matrix(Eigen::MatrixXd &A) const = 0;
+    //virtual Eigen::VectorXd operator*(const Eigen::VectorXd &V) const = 0;
 };
 
 class MatrixMult : public AbstractMatrixMult
@@ -80,7 +81,8 @@ class MatrixMult : public AbstractMatrixMult
     int dimension() const { return H.rows(); }
     void diagonal(Eigen::VectorXd &V) const { V = H.diagonal(); }
     void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { HV = H * V; }
-    Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
+    void matrix(Eigen::MatrixXd &A) const { A = H; }
+    //Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
 };
 
 class DirectMatrixMult : public AbstractMatrixMult
@@ -92,8 +94,9 @@ class DirectMatrixMult : public AbstractMatrixMult
     DirectMatrixMult(const Hamiltonian &Ham) : H{Ham} {}
     int dimension() const { return H.dimension(); }
     void diagonal(Eigen::VectorXd &V) const { H.diagonal(V); }
-    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { H.Fmultiply(V, HV); }
-    Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
+    void multiply(const Eigen::VectorXd &V, Eigen::VectorXd &HV) const { H.multiply(V, HV); }
+    void matrix(Eigen::MatrixXd &A) const { H.matrix(A); }
+    //Eigen::VectorXd operator*(const Eigen::VectorXd &V) const { return H * V; }
 };
 
 class Davidson
@@ -120,6 +123,7 @@ class Davidson
 
     int run(const Hamiltonian &H, int _n = 1, double _tol = 1.e-8, int _vmax = 25, int _nrestart = 5) 
     {
+        //assert()
         DirectMatrixMult Mat(H);
         return run(Mat, _n, _tol, _vmax, _nrestart);
     }
@@ -131,19 +135,25 @@ class Davidson
         nrestart = _nrestart;
         tol = _tol;
         int dim = A.dimension();
-        //diagonal
-        Eigen::VectorXd diag;
-        A.diagonal(diag);
-        //if small problem
-        if (dim < vmax)
-        {
-            vmax = dim;
-            nrestart = n;
-            assert(n < dim);
-        }
+
         //make room for solution
         Vectors.setZero(dim, n);
         Values.setZero(n);
+
+        //if small problem
+        if (dim < vmax)
+        {
+            Eigen::MatrixXd Aprime;
+            A.matrix(Aprime);
+            Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(Aprime);
+            Values = es.eigenvalues();
+            Vectors = es.eigenvectors();
+            return 0;
+        }
+
+        //diagonal
+        Eigen::VectorXd diag;
+        A.diagonal(diag);
 
         //initalize vector and subspace
         Eigen::MatrixXd V(dim, n), AV(dim, n);
@@ -165,7 +175,7 @@ class Davidson
         double old_rNorm = 1000000;
         for (int iter = 1; iter <= 50; iter++)
         {    
-        //std::cout << iter << std::endl;
+        std::cout << iter << std::endl;
             //subspace problem
             int subdim = V.cols(); //dimension of subspace
             Eigen::MatrixXd Aprime = V.adjoint() * AV;
@@ -190,7 +200,7 @@ class Davidson
             }
             
             Eigen::VectorXd Theta = D.segment(index, n);
-        //std::cout << Theta.transpose() << std::endl;
+        std::cout << Theta.transpose() << std::endl;
             Eigen::MatrixXd U = V * S.block(0, index, subdim, n);
             Eigen::MatrixXd AU = AV * S.block(0, index, subdim, n);
             Eigen::MatrixXd Delta = Eigen::MatrixXd::Zero(dim, n);

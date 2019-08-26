@@ -73,12 +73,13 @@ Determinant::~Determinant()
 
 std::size_t Determinant::key() const //unique key to determinant
 {
-    std::string str;
+    std::string alpha, beta;
     for (int i = 0; i < Len; i++)
     {
-        str = std::to_string(String[1][i]) + std::to_string(String[0][i]) + str;
+        alpha += std::to_string(String[0][i]) + std::to_string(i);
+        beta += std::to_string(String[1][i]) + std::to_string(i);
     }
-    return std::hash<std::string>{}(str);
+    return std::hash<std::string>{}(alpha + beta);
 }
 
 Determinant &Determinant::operator=(Determinant RHS) //copy/assignment operator
@@ -215,7 +216,6 @@ void Determinant::set(int spin_orbital, bool occupancy)
 
 //coefficient getter and setter
 double Determinant::coeff() const { return Coeff; }
-double &Determinant::coeff() { return Coeff; }
 void Determinant::coeff(double coefficient) { Coeff = coefficient; }
 
 //counts occupied spin orbitals in Determinant
@@ -376,6 +376,7 @@ void Determinant::connected(std::vector<Determinant> &dets) const
 
     //self
     dets.push_back(dcopy);
+
     //single excitations
     for (int sz = 0; sz < 2; sz++)
     {
@@ -476,6 +477,83 @@ void Determinant::singlyConnected(std::vector<Determinant> &dets) const
             }
         }
     }    
+}
+
+//generates all doubly connected determinants from a given det, ie double excitations
+int Determinant::numDoublyConnected() const
+{
+    int num = 0;
+    std::array<std::vector<int>, 2> open, closed;
+    OpenClosed(open, closed);
+
+    //double excitations
+    for (int sz = 0; sz < 2; sz++) //like spin
+    {
+        int pickclosed = closed[sz].size() * (closed[sz].size() - 1) / 2;
+        int pickopen = open[sz].size() * (open[sz].size() - 1) / 2;
+        num +=  pickclosed * pickopen;
+    }
+    //differing spin
+    int pickclosed = closed[0].size() * closed[1].size();
+    int pickopen = open[0].size() * open[1].size();    
+    num += pickclosed * pickopen;
+    return num;
+}
+
+void Determinant::doublyConnected(std::vector<Determinant> &dets) const
+{
+    dets.clear();
+    std::array<std::vector<int>, 2> open, closed;
+    OpenClosed(open, closed);
+
+    //double excitations
+    for (int sz = 0; sz < 2; sz++) //like spin
+    {
+        for (int i = 0; i < closed[sz].size(); i++)
+        {
+            for (int j = i + 1; j < closed[sz].size(); j++)
+            {
+                for (int a = 0; a < open[sz].size(); a++)
+                {
+                    for (int b = a + 1; b < open[sz].size(); b++)
+                    {
+                        int p = closed[sz][i];
+                        int q = closed[sz][j];
+                        int r = open[sz][a];
+                        int s = open[sz][b];
+                        Determinant dexcite(*this);
+                        dexcite.set(p, sz, false);
+                        dexcite.set(q, sz, false); 
+                        dexcite.set(r, sz, true);
+                        dexcite.set(s, sz, true); 
+                        dets.push_back(dexcite);
+                    }
+                }
+            }
+        }
+    }
+    for (int i = 0; i < closed[0].size(); i++) //differing spin
+    {
+        for (int j = 0; j < closed[1].size(); j++)
+        {
+            for (int a = 0; a < open[0].size(); a++)
+            {
+                for (int b = 0; b < open[1].size(); b++)
+                {
+                    int p = closed[0][i];
+                    int q = closed[1][j];
+                    int r = open[0][a];
+                    int s = open[1][b];
+                    Determinant dexcite(*this);
+                    dexcite.set(p, 0, false);
+                    dexcite.set(q, 1, false); 
+                    dexcite.set(r, 0, true);
+                    dexcite.set(s, 1, true); 
+                    dets.push_back(dexcite);
+                }
+            }
+        }
+    }
 }
 
 //calculates the number of different occupied orbitals between two determinants

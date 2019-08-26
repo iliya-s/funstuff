@@ -159,6 +159,7 @@ class Hamiltonian
 
     void diagonal(Eigen::VectorXd &CI) const
     {
+        assert(V != nullptr);
         CI.setZero(V->size());
         int i = 0;
         for (auto it = V->begin(); it != V->end(); ++it)
@@ -170,6 +171,7 @@ class Hamiltonian
 
     void matrix(Eigen::MatrixXd &H) const
     {
+        assert(V != nullptr);
         H.setZero(V->size(), V->size());
         int i = 0;
         for (auto row = V->begin(); row != V->end(); ++row)
@@ -186,6 +188,7 @@ class Hamiltonian
 
     void multiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
     {
+        assert(V != nullptr);
         assert(V->size() == z.rows());
         Hz.setZero(z.rows());
         int i = 0;
@@ -203,6 +206,7 @@ class Hamiltonian
 
     void Fmultiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
     {
+        assert(V != nullptr);
         assert(V->size() == z.rows());
         V->update(z);
         Hz.setZero(z.rows());
@@ -225,6 +229,7 @@ class Hamiltonian
 
     Eigen::VectorXd operator*(const Eigen::VectorXd &z) const
     {
+        assert(V != nullptr);
         assert(V->size() == z.rows());
         Eigen::VectorXd Hz = Eigen::VectorXd::Zero(z.rows());
         int i = 0;

@@ -73,7 +73,6 @@ class Determinant
     void set(int spin_orbital, bool occupancy);
     //coefficient getter and setter;
     double coeff() const;
-    double &coeff();
     void coeff(double coefficient);
 
     //counts occupied spin orbitals in Determinant
@@ -101,6 +100,9 @@ class Determinant
     //generates all singly connected determinants from a given det, ie single excitations
     int numSinglyConnected() const;
     void singlyConnected(std::vector<Determinant> &dets) const;
+    //generates all doubly connected determinants from a given det, ie double excitations
+    int numDoublyConnected() const;
+    void doublyConnected(std::vector<Determinant> &dets) const;
 
     //friend functions for hamiltonian overlap
     friend class Hamiltonian;

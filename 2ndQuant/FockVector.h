@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include <Eigen/Dense>
 
-struct HashDet { std::size_t operator()(const Determinant &D) const { return D.key(); } };
 struct HashKey { std::size_t operator()(const std::size_t &key) const { return key; } };
 
 class FockVector
@@ -20,16 +19,24 @@ class FockVector
     auto end() { return Store.end(); } //end iterator
     auto begin() const { return Store.begin(); } //begin const iterator
     auto end() const { return Store.end(); } //end const iterator
-    auto insert(const Determinant &D) { return Store.emplace(D.key(), D); }
+    //auto insert(const Determinant &D) { return Store.emplace(D.key(), D); }
+    auto insert(const Determinant &D)
+    {
+        auto pair = Store.emplace(D.key(), D);
+        if (pair.second == false)
+        {
+            std::cout << "failed insertion" << std::endl;
+            std::cout << D.key() << " " << D << std::endl;
+            std::cout << pair.first->second.key() << " " << pair.first->second << std::endl;
+        }
+    }
     auto remove(const Determinant &D) { return Store.erase(D.key()); }
     void clear() { Store.clear(); } //clear vector
     void ones() { for (auto it = begin(); it != end(); ++it) { it->second.coeff(1.0); } } //sets all coefficients to one
     double at(const Determinant &D) const
     {
         double val = 0.0;
-        //auto search = Store.find(D);
         if (Store.count(D.key()) == 1) { val = Store.at(D.key()).coeff(); }
-
         return val;
     }
     /*
@@ -50,8 +57,8 @@ class FockVector
         int i = 0;
         for (auto it = begin(); it != end(); ++it)
         {
-            //if (std::abs(V(i)) < 1.e-8) { it->Coeff = 0.0; }
-            //else { it->Coeff = V(i); }
+            //if (std::abs(V(i)) < 1.e-8) { it->second.coeff(0.0); }
+            //else { it->second.coeff(V(i)); }
             it->second.coeff(V(i));
             i++;
         }
@@ -63,14 +70,14 @@ class FockVector
         int i = 0;
         for (auto it = begin(); it != end(); ++it)
         {
-            //double val = it->coeff();
+            //double val = it->second.coeff();
             //if (std::abs(val) > 1.e-8) { V(i) = val; }
             V(i) = it->second.coeff();
             i++;
         } 
     }
 
-    void trim(double tol = 1.e-8)
+    void trim(double tol = 1.e-4)
     {
         auto it = begin();
         while (it != end())
@@ -104,10 +111,10 @@ class FCIVector: public FockVector
             for (int j = 0; j < beta.size(); j++)
             {
                 Determinant det(alpha[i], beta[j]);
-                Store.emplace(det.key(), det);
+                insert(det);
             }
         }
-        assert(size() == alpha.size() * beta.size());
+        assert(Store.size() == alpha.size() * beta.size());
     }
 };
 
@@ -123,7 +130,24 @@ class CISDVector: public FockVector
         std::vector<Determinant> dets;
         hf.connected(dets);
         for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
-        assert(hf.numConnected() == dets.size());
+        assert(hf.numConnected() == Store.size());
+    }
+};
+
+class CIDVector: public FockVector
+{
+    private:
+
+    public:
+    CIDVector()
+    {
+        Determinant hf;
+        hf.HartreeFock();
+        insert(hf);
+        std::vector<Determinant> dets;
+        hf.doublyConnected(dets);
+        for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
+        assert((hf.numDoublyConnected() + 1) == Store.size());
     }
 };
 #endif
