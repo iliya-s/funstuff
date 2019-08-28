@@ -123,7 +123,6 @@ class Davidson
 
     int run(const Hamiltonian &H, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) 
     {
-        //assert()
         DirectMatrixMult Mat(H);
         return run(Mat, _n, _tol, _vmax, _nrestart);
     }

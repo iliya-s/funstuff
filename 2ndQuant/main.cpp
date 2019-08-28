@@ -304,6 +304,50 @@ int main(int argc, char *argv[])
     }
     */
     {
+        cout << "\n\nCIS with direct Davidson" << endl;
+        cout << "hf det and energy" << std::endl;
+        Hamiltonian H;
+        Determinant hf;
+        hf.HartreeFock();
+        cout << H.energy(hf) * hf << endl;
+        CISVector CI;
+        H.space(CI);
+        cout << "size of fock space: " << CI.size() << endl;
+        Davidson es;
+        //DirectMatrixMult Mat(H);
+        auto begin = std::time(nullptr);
+        int numIter = es.run(H);
+        auto end = std::time(nullptr);
+        cout << "number of iterations: " << numIter << std::endl;
+        double val = es.eigenvalues()(0);
+        cout << "\n" << std::endl;
+        cout << "Ground state Energy: " << es.eigenvalues()(0) << endl;
+        //cout << "1st excited state Energy: " << es.eigenvalues()(1) << endl;
+        //cout << "2st excited state Energy: " << es.eigenvalues()(2) << endl;
+        //cout << "3rd excited state Energy: " << es.eigenvalues()(3) << endl;
+        Eigen::VectorXd gs = es.eigenvectors().col(0);
+        CI.update(gs);
+        Eigen::VectorXd Hgs = H * gs;
+        Eigen::VectorXd r = Hgs - val * gs;
+        cout << "residual: " << r.norm() << endl;
+        std::cout << "Compactness of Hamiltonian: " << ((double)H.size() / (double)(CI.size() * CI.size())) << endl;
+        /*
+        std::vector<Determinant> dets;
+        hf.connected(dets);
+        for (int i = 0; i < 10; i++)
+        {
+            cout << CI(dets[i]) << endl;
+        }
+        */
+        //CI.trim(1.e-3);
+        //std::cout << CI << std::endl;
+        std::cout << "total time: " << end - begin << std::endl;
+        cout << "\nCorrelation energy\n";
+        cout << val - H.energy(hf) << endl;
+        cout << "Davdison correction\n";
+        cout << (1.0 - CI(hf) * CI(hf)) * (val - H.energy(hf));
+    }
+    {
         cout << "\n\nCID with direct Davidson" << endl;
         cout << "hf det and energy" << std::endl;
         Hamiltonian H;
@@ -340,7 +384,7 @@ int main(int argc, char *argv[])
         }
         */
         CI.trim(1.e-3);
-        std::cout << CI << std::endl;
+        //std::cout << CI << std::endl;
         std::cout << "total time: " << end - begin << std::endl;
         cout << "\nCorrelation energy\n";
         cout << val - H.energy(hf) << endl;
@@ -385,7 +429,7 @@ int main(int argc, char *argv[])
         }
         */
         CI.trim(1.e-3);
-        std::cout << CI << std::endl;
+        //std::cout << CI << std::endl;
         std::cout << "total time: " << end - begin << std::endl;
         cout << "\nCorrelation energy\n";
         cout << val - H.energy(hf) << endl;
@@ -445,7 +489,7 @@ int main(int argc, char *argv[])
         */
         std::cout << "Compactness of Hamiltonian: " << ((double)H.size() / (double)(CI.size() * CI.size())) << endl;
         CI.trim(1.e-3);
-        std::cout << CI << std::endl;
+        //std::cout << CI << std::endl;
         std::cout << "total time: " << end - begin << std::endl;
         cout << "\nCorrelation energy\n";
         cout << val - H.energy(hf) << endl;

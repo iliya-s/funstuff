@@ -19,8 +19,7 @@ class FockVector
     auto end() { return Store.end(); } //end iterator
     auto begin() const { return Store.begin(); } //begin const iterator
     auto end() const { return Store.end(); } //end const iterator
-    //auto insert(const Determinant &D) { return Store.emplace(D.key(), D); }
-    auto insert(const Determinant &D)
+    void insert(const Determinant &D)
     {
         auto pair = Store.emplace(D.key(), D);
         if (pair.second == false)
@@ -39,17 +38,8 @@ class FockVector
         if (Store.count(D.key()) == 1) { val = Store.at(D.key()).coeff(); }
         return val;
     }
-    /*
-    double &at(const Determinant &D)
-    {
-        std::cout << "i" << std::endl;
-        auto search = Store.find(D);
-        if (search == end()) { search = insert(D).first; }
-        return search->Coeff;
-    }
-    */
+
     double operator()(const Determinant &D) const { return at(D); }
-    //double &operator()(const Determinant &D) { return at(D); }
 
     void update(const Eigen::VectorXd &V)
     {
@@ -57,8 +47,6 @@ class FockVector
         int i = 0;
         for (auto it = begin(); it != end(); ++it)
         {
-            //if (std::abs(V(i)) < 1.e-8) { it->second.coeff(0.0); }
-            //else { it->second.coeff(V(i)); }
             it->second.coeff(V(i));
             i++;
         }
@@ -70,11 +58,19 @@ class FockVector
         int i = 0;
         for (auto it = begin(); it != end(); ++it)
         {
-            //double val = it->second.coeff();
-            //if (std::abs(val) > 1.e-8) { V(i) = val; }
             V(i) = it->second.coeff();
             i++;
         } 
+    }
+
+    void determinants(std::vector<Determinant> &dets)
+    {
+        dets.clear();
+        for (auto it = begin(); it != end(); ++it)
+        {
+            dets.push_back(it->second);
+        }
+        std::sort(dets.begin(), dets.end(), [](const Determinant &a, const Determinant &b) { return  a.coeff() > b.coeff(); });
     }
 
     void trim(double tol = 1.e-4)
@@ -118,19 +114,20 @@ class FCIVector: public FockVector
     }
 };
 
-class CISDVector: public FockVector
+class CISVector: public FockVector
 {
     private:
 
     public:
-    CISDVector()
+    CISVector()
     {
         Determinant hf;
         hf.HartreeFock();
+        insert(hf);
         std::vector<Determinant> dets;
-        hf.connected(dets);
+        hf.singlyConnected(dets);
         for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
-        assert(hf.numConnected() == Store.size());
+        assert((hf.numSinglyConnected() + 1) == Store.size());
     }
 };
 
@@ -148,6 +145,22 @@ class CIDVector: public FockVector
         hf.doublyConnected(dets);
         for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
         assert((hf.numDoublyConnected() + 1) == Store.size());
+    }
+};
+
+class CISDVector: public FockVector
+{
+    private:
+
+    public:
+    CISDVector()
+    {
+        Determinant hf;
+        hf.HartreeFock();
+        std::vector<Determinant> dets;
+        hf.connected(dets);
+        for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
+        assert(hf.numConnected() == Store.size());
     }
 };
 #endif

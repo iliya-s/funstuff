@@ -204,48 +204,6 @@ class Hamiltonian
             i++;
         }
     }    
-    */
-
-    void multiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
-    {
-        assert(V != nullptr);
-        assert(V->size() == z.rows());
-        Hz.setZero(z.rows());
-        Determinant det;
-        det.HartreeFock();
-    
-        if (V->size() <= det.numConnected())
-        {
-            int i = 0;
-            for (auto row = V->begin(); row != V->end(); ++row)
-            {
-                int j = 0;
-                for (auto col = V->begin(); col != V->end(); ++col)
-                {
-                    Hz(i) += (*this)(row->second, col->second) * z(j);
-                    j++;
-                }
-                i++;
-            }
-        }    
-        else
-        {
-            V->update(z);
-            int i = 0;
-            for (auto row = V->begin(); row != V->end(); ++row)
-            {
-                std::vector<Determinant> dets;
-                row->second.connected(dets);
-                for (auto col = dets.begin(); col != dets.end(); ++col)
-                {
-                    double val = V->at(*col);
-                    if (val != 0.0) { Hz(i) += (*this)(row->second, *col) * val; }
-                }
-                i++;
-            }
-            V->ones();
-        }
-    }
 
     void Fmultiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
     {
@@ -269,25 +227,91 @@ class Hamiltonian
         }
         V->ones();
     }    
+    */
+
+    void multiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
+    {
+        assert(V != nullptr);
+        assert(V->size() == z.rows());
+        Hz.setZero(z.rows());
+        Determinant det;
+        det.HartreeFock();
+    
+        if (V->size() <= det.numConnected()) //if the fock space is on the order of the number of connections, normal matrix multiplication
+        {
+            int i = 0;
+            for (auto row = V->begin(); row != V->end(); ++row)
+            {
+                int j = 0;
+                for (auto col = V->begin(); col != V->end(); ++col)
+                {
+                    Hz(i) += (*this)(row->second, col->second) * z(j);
+                    j++;
+                }
+                i++;
+            }
+        }    
+        else //if the fock space is larger than the number of connections, fast matrix multiplication
+        {
+            V->update(z);
+            int i = 0;
+            for (auto row = V->begin(); row != V->end(); ++row)
+            {
+                std::vector<Determinant> dets;
+                row->second.connected(dets);
+                for (auto col = dets.begin(); col != dets.end(); ++col)
+                {
+                    double val = V->at(*col);
+                    if (val != 0.0) { Hz(i) += (*this)(row->second, *col) * val; }
+                }
+                i++;
+            }
+            V->ones();
+        }
+    }
 
     Eigen::VectorXd operator*(const Eigen::VectorXd &z) const
     {
         assert(V != nullptr);
         assert(V->size() == z.rows());
         Eigen::VectorXd Hz = Eigen::VectorXd::Zero(z.rows());
-        int i = 0;
-        for (auto row = V->begin(); row != V->end(); ++row)
+        Determinant det;
+        det.HartreeFock();
+    
+        if (V->size() <= det.numConnected()) //if the fock space is on the order of the number of connections, normal matrix multiplication
         {
-            int j = 0;
-            for (auto col = V->begin(); col != V->end(); ++col)
+            int i = 0;
+            for (auto row = V->begin(); row != V->end(); ++row)
             {
-                Hz(i) += (*this)(row->second, col->second) * z(j);
-                j++;
+                int j = 0;
+                for (auto col = V->begin(); col != V->end(); ++col)
+                {
+                    Hz(i) += (*this)(row->second, col->second) * z(j);
+                    j++;
+                }
+                i++;
             }
-            i++;
+        }    
+        else //if the fock space is larger than the number of connections, fast matrix multiplication
+        {
+            V->update(z);
+            int i = 0;
+            for (auto row = V->begin(); row != V->end(); ++row)
+            {
+                std::vector<Determinant> dets;
+                row->second.connected(dets);
+                for (auto col = dets.begin(); col != dets.end(); ++col)
+                {
+                    double val = V->at(*col);
+                    if (val != 0.0) { Hz(i) += (*this)(row->second, *col) * val; }
+                }
+                i++;
+            }
+            V->ones();
         }
         return Hz;
-    }    
+    }
+
 
 };
 
