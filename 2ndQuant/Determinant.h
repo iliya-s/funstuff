@@ -108,8 +108,8 @@ class Determinant
     friend class Hamiltonian;
     friend class FockVector; //friend object Fock vector
     friend int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS); //calculates the number of different occupied orbitals between two determinants
-    friend void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a); //finds spin orbital indices of differing occupied orbital for two determinants with 1 differing orbital
-    friend void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b); //finds spin orbital indices of differing occupied orbitals for two determinants with 2 differing orbitals occupied
+    friend std::pair<int, int> OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS); //finds spin orbital indices of differing occupied orbital for two determinants with 1 differing orbital
+    friend std::pair<std::pair<int, int>, std::pair<int, int>> TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS); //finds spin orbital indices of differing occupied orbitals for two determinants with 2 differing orbitals occupied
 };
 
 //generates all n choose k combinations of integers and stores them in combinations

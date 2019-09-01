@@ -24,8 +24,9 @@ namespace Integral
             Store.assign(Norb * Norb, 0.0);
         }
 
-        inline double operator() (int i, int j) const { return Store.at(i * Norb + j); }
-        inline double &operator() (int i, int j) { return Store.at(i * Norb + j); }
+        int norb() const { return Norb; }
+        inline double operator()(int i, int j) const { return Store.at(i * Norb + j); }
+        inline double &operator()(int i, int j) { return Store.at(i * Norb + j); }
     };
     
     class TwoElectron
@@ -49,7 +50,8 @@ namespace Integral
             Store.assign(npair * (npair + 1) / 2, 0.0);
         }
 
-        inline double operator() (int i, int j, int k, int l) const
+        int norb() const { return Norb; }
+        inline double operator()(int i, int j, int k, int l) const
         {
             int ij, kl;
             if (Ksym == true)
@@ -65,7 +67,7 @@ namespace Integral
             int ijkl = std::max(ij, kl) * (std::max(ij, kl) + 1) / 2 + std::min(ij, kl);
             return Store.at(ijkl);
         }
-        inline double &operator() (int i, int j, int k, int l)
+        inline double &operator()(int i, int j, int k, int l)
         {
             int ij, kl;
             if (Ksym == true)
@@ -82,6 +84,19 @@ namespace Integral
             return Store.at(ijkl);
         }
     };
+
+    namespace HeatBath
+    {
+        class OneElectron
+        {
+
+        };
+        
+        class TwoElectron
+        {
+
+        };
+    }
 }
 
 void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoElectron &I2, double &core_e, int &norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep);

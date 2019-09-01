@@ -109,13 +109,19 @@ int main(int argc, char *argv[])
         cout << "D " <<  D << endl;
         cout << "L " <<  L << endl;
         int i, j, o, p;
-        OneDiffOrbIndices(D, L, i, j);
+        auto ij = OneDiffOrbIndices(D, L);
+        i = ij.first;
+        j = ij.second;
         cout << i << " " << j << endl;
         cout << "Double Excitation" << endl;
         L = E(15, 6) * L;
         cout << "D " <<  D << endl;
         cout << "L " <<  L << endl;
-        TwoDiffOrbIndices(D, L, i, j, o, p);
+        auto ijab = TwoDiffOrbIndices(D, L);
+        i = ijab.first.first;
+        j = ijab.first.second;
+        o = ijab.second.first;
+        p = ijab.second.second;
         cout << i << " " << j << " " << o << " " << p << endl;
     }
 

@@ -123,6 +123,7 @@ void WriteMatrix(std::string MatrixFile, const Eigen::MatrixXd &M)
     if (!f.is_open())
     {
         std::cout << "Matrix file " << MatrixFile << " could not be opened" << std::endl;
+        exit(1);
     }
     for (int i = 0; i < M.rows(); i++)
     {

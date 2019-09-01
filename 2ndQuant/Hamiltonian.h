@@ -7,8 +7,6 @@
 #include <unordered_map>
 #include <Eigen/Dense>
 
-//struct HashKey { std::size_t operator()(const std::size_t &key) const { return key; } };
-
 class Hamiltonian
 {
     private:
@@ -102,8 +100,9 @@ class Hamiltonian
             if (Hia.count(key) == 1) { H = Hia.at(key); } //if element has been calculated, extract from hashtable
             else
             {
-                int i = 0, a = 0;
-                OneDiffOrbIndices(LHS, RHS, i, a);
+                auto ia = OneDiffOrbIndices(LHS, RHS);
+                int i = ia.first;
+                int a = ia.second;
 
                 int si = i % 2;
                 int sa = a % 2;
@@ -124,8 +123,8 @@ class Hamiltonian
                     int sr = closed[r] % 2;  
                     int orbr = closed[r] / 2;
 
-                    if (si == sa) { H += pi * pa * I2(orbi, orba, orbr, orbr); } //direct term
-                    if (si == sr && sa == sr) { H -= pi * pa * I2(orbi, orbr, orbr, orba); } //exchange term
+                    if (si == sa) { H += pi * pa * I2(orbi, orba, orbr, orbr); }
+                    if (si == sr && sa == sr) { H -= pi * pa * I2(orbi, orbr, orbr, orba); }
                 }
                 //add newly calculated element to hashtable
                 Hia[key] = H;
@@ -133,8 +132,11 @@ class Hamiltonian
         }
         else if (n == 2) //LHS(ij -> ab) == RHS
         {
-            int i = 0, j = 0, a = 0, b = 0;
-            TwoDiffOrbIndices(LHS, RHS, i, j, a, b);
+            auto ijab = TwoDiffOrbIndices(LHS, RHS);
+            int i = ijab.first.first;
+            int j = ijab.first.second;
+            int a = ijab.second.first;
+            int b = ijab.second.second;
 
             int si = i % 2;
             int sj = j % 2;
@@ -151,8 +153,8 @@ class Hamiltonian
 
             //one electron operator = 0
             //two electron operator
-            if (si == sa && sj == sb) { H += pi * pj * pa * pb * I2(orbi, orba, orbj, orbb); } //direct
-            if (si == sb && sj == sa) { H -= pi * pj * pa * pb * I2(orbi, orbb, orbj, orba); } //exchange
+            if (si == sa && sj == sb) { H += pi * pj * pa * pb * I2(orbi, orba, orbj, orbb); }
+            if (si == sb && sj == sa) { H -= pi * pj * pa * pb * I2(orbi, orbb, orbj, orba); }
         }
         return H;
     }
@@ -259,10 +261,10 @@ class Hamiltonian
             {
                 std::vector<Determinant> dets;
                 row->second.connected(dets);
-                for (auto col = dets.begin(); col != dets.end(); ++col)
+                for (int j = 0; j < dets.size(); j++)
                 {
-                    double val = V->at(*col);
-                    if (val != 0.0) { Hz(i) += (*this)(row->second, *col) * val; }
+                    double val = V->at(dets[j]);
+                    if (val != 0.0) { Hz(i) += (*this)(row->second, dets[j]) * val; }
                 }
                 i++;
             }

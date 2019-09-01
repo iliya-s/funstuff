@@ -572,7 +572,7 @@ int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS)
 
 //finds spin orbital indices of differing occupied orbital for two determinants with 1 differing orbital
 //  i corresponds to the spin orbital occupied in LHS, a corresponds to the spin orbital occupied in RHS
-void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &a)
+std::pair<int, int> OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS)
 {
     int indices[2];
     for (int l = 0; l < RHS.Len; l++)
@@ -606,6 +606,7 @@ void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, i
             pos++;
         }
     }
+    int i, a;
     if (LHS(indices[0])) //LHS has ith orbital occupied
     {
         i = indices[0];
@@ -616,11 +617,12 @@ void OneDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, i
         i = indices[1];
         a = indices[0];
     }   
+    return std::make_pair(i, a);
 }
 
 //finds spin orbital indices of differing occupied orbitals for two determinants with 2 differing orbitals occupied
 //  i, j corresponds to the spin orbitals occupied in LHS, a, b corresponds to the spin orbitals occupied in RHS
-void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, int &j, int &a, int &b)
+std::pair<std::pair<int, int>, std::pair<int, int>> TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS)
 {
     int indices[4];
     for (int l = 0; l < LHS.Len; l++)
@@ -654,6 +656,7 @@ void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, i
             pos++;
         }
     }
+    int i, j, a, b;
     if (LHS(indices[0]) && LHS(indices[1]))
     {
         i = std::min(indices[0], indices[1]);
@@ -696,6 +699,7 @@ void TwoDiffOrbIndices(const Determinant &LHS, const Determinant &RHS, int &i, i
         a = std::min(indices[1], indices[0]);
         b = std::max(indices[1], indices[0]);
     }
+    return std::pair<std::pair<int, int>, std::pair<int, int>>(std::make_pair(i, j), std::make_pair(a, b));
 }
 
 void GenerateCombinations(int n, int k, std::vector<std::vector<int>> &combinations)

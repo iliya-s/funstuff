@@ -110,6 +110,8 @@ class Davidson
     public:
     Davidson() {}
     Davidson(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const Hamiltonian &H, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(H, n, vmax, nrestart, tol); }
+
     Davidson(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
 
     const Eigen::VectorXd &eigenvalues() const { return Values; }
