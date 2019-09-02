@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <Eigen/Dense>
 
+struct HashKey { std::size_t operator()(const std::size_t &key) const { return key; } };
+
 class Hamiltonian
 {
     private:
@@ -178,28 +180,19 @@ class Hamiltonian
     {
         assert(V != nullptr);
         CI.setZero(V->size());
-        int i = 0;
-        for (auto it = V->begin(); it != V->end(); ++it)
-        {
-            CI(i) = energy(it->second);
-            i++;
-        }
+        for (int i = 0; i < CI.size(); i++) { CI(i) = energy(V->at(i)); }
     }
 
     void matrix(Eigen::MatrixXd &H) const
     {
         assert(V != nullptr);
         H.setZero(V->size(), V->size());
-        int i = 0;
-        for (auto row = V->begin(); row != V->end(); ++row)
+        for (int i = 0; i < V->size(); i++)
         {
-            int j = 0;
-            for (auto col = V->begin(); col != V->end(); ++col)
+            for (int j = 0; j < V->size(); j++)
             {
-                H(i, j) = (*this)(row->second, col->second);
-                j++;
+                H(i, j) = (*this)(V->at(i), V->at(j));
             }
-            i++;
         }
     }
 
@@ -210,39 +203,33 @@ class Hamiltonian
         Hz.setZero(z.rows());
         Determinant det;
         det.HartreeFock();
-    
+
         if (V->size() <= det.nExcitations() + 1) //if the fock space is on the order of the number of connections, normal matrix multiplication
+        //if (true)
         {
-            int i = 0;
-            for (auto row = V->begin(); row != V->end(); ++row)
+            for (int i = 0; i < V->size(); i++)
             {
-                int j = 0;
-                for (auto col = V->begin(); col != V->end(); ++col)
+                for (int j = 0; j < V->size(); j++)
                 {
-                    Hz(i) += (*this)(row->second, col->second) * z(j);
-                    j++;
+                    Hz(i) += (*this)(V->at(i), V->at(j)) * z(j);
                 }
-                i++;
             }
         }    
         else //if the fock space is larger than the number of connections, fast matrix multiplication
         {
-            V->update(z);
-            int i = 0;
-            for (auto row = V->begin(); row != V->end(); ++row)
+            for (int i = 0; i < V->size(); i++)
             {
+                const Determinant &det(V->at(i));
                 std::vector<Determinant> dets;
-                dets.push_back(row->second);
-                //row->second.excitations(dets);
-                row->second.screenedExcitations(HBI1, HBI2, dets);
+                dets.push_back(det);
+                //det.excitations(dets);
+                det.screenedExcitations(HBI1, HBI2, dets);
                 for (int j = 0; j < dets.size(); j++)
                 {
-                    double val = V->at(dets[j]);
-                    if (val != 0.0) { Hz(i) += (*this)(row->second, dets[j]) * val; }
+                    int nj = V->at(dets[j]);
+                    if (nj < V->size()) { Hz(i) += (*this)(det, dets[j]) * z(nj); }
                 }
-                i++;
             }
-            V->ones();
         }
     }
 
@@ -253,38 +240,31 @@ class Hamiltonian
         Eigen::VectorXd Hz = Eigen::VectorXd::Zero(z.rows());
         Determinant det;
         det.HartreeFock();
-    
-        if (V->size() <= det.nExcitations() + 1) //if the fock space is on the order of the number of excitations, normal matrix multiplication
+
+        if (V->size() <= det.nExcitations() + 1) //if the fock space is on the order of the number of connections, normal matrix multiplication
         {
-            int i = 0;
-            for (auto row = V->begin(); row != V->end(); ++row)
+            for (int i = 0; i < V->size(); i++)
             {
-                int j = 0;
-                for (auto col = V->begin(); col != V->end(); ++col)
+                for (int j = 0; j < V->size(); j++)
                 {
-                    Hz(i) += (*this)(row->second, col->second) * z(j);
-                    j++;
+                    Hz(i) += (*this)(V->at(i), V->at(j)) * z(j);
                 }
-                i++;
             }
         }    
         else //if the fock space is larger than the number of connections, fast matrix multiplication
         {
-            V->update(z);
-            int i = 0;
-            for (auto row = V->begin(); row != V->end(); ++row)
+            for (int i = 0; i < V->size(); i++)
             {
+                const Determinant &det(V->at(i));
                 std::vector<Determinant> dets;
-                dets.push_back(row->second);
-                row->second.excitations(dets);
-                for (auto col = dets.begin(); col != dets.end(); ++col)
+                dets.push_back(det);
+                det.screenedExcitations(HBI1, HBI2, dets, 0.0);
+                for (int j = 0; j < dets.size(); j++)
                 {
-                    double val = V->at(*col);
-                    if (val != 0.0) { Hz(i) += (*this)(row->second, *col) * val; }
+                    int nj = V->at(dets[j]);
+                    if (nj < V->size()) { Hz(i) += (*this)(det, dets[j]) * z(nj); }
                 }
-                i++;
             }
-            V->ones();
         }
         return Hz;
     }

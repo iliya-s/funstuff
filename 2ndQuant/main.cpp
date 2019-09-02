@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include "Determinant.h"
 #include "FundamentalOperators.h"
 #include "NumberOperators.h"
@@ -9,7 +10,8 @@
 #include <Eigen/Dense>
 
 #include <bitset>
-//#include <map>
+#include <map>
+//#include <unordered_map>
 #include <ctime>
 
 #ifndef SERIAL
@@ -31,6 +33,52 @@ int main(int argc, char *argv[])
     boost::mpi::environment env(argc, argv);
     boost::mpi::communicator world;
 #endif 
+    {
+        /*
+        std::vector<int> r(100000000);
+        std::iota(r.begin(), r.end(), 0);
+        std::random_shuffle(r.begin(), r.end());
+
+        auto begin = std::time(nullptr);
+        std::unordered_map<int, int> A;
+        for (int i = 0; i < r.size(); i++)
+        {
+            A.insert(std::make_pair(r[i], i));
+        }
+        auto end = std::time(nullptr);
+        cout << "insert into hashtable: " << end - begin << endl;
+
+        begin = std::time(nullptr);
+        std::vector<int> B;
+        for (int i = 0; i < r.size(); i++)
+        {
+            B.push_back(r[i]);
+        }
+        end = std::time(nullptr);
+        cout << "insert into vector: " << end - begin << endl;
+
+        begin = std::time(nullptr);
+        std::sort(B.begin(), B.end());
+        end = std::time(nullptr);
+        cout << "time to sort vector: " << end - begin << endl;
+
+        begin = std::time(nullptr);
+        for (int i = 0; i < r.size(); i++)
+        {
+            int val = A.at(i);
+        }
+        end = std::time(nullptr);
+        cout << "access all elements in hashtable: " << end - begin << endl;
+
+        begin = std::time(nullptr);
+        for (int i = 0; i < r.size(); i++)
+        {
+            auto it = std::lower_bound(B.begin(), B.end(), i);
+        }
+        end = std::time(nullptr);
+        cout << "access all elements in vector: " << end - begin << endl;
+        */
+    }
     {
         long r = 2;
         cout << r << " in bits: " << bitset<64>(r) << endl;

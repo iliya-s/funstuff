@@ -109,32 +109,33 @@ class Davidson
 
     public:
     Davidson() {}
-    Davidson(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
-    Davidson(const Hamiltonian &H, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(H, n, vmax, nrestart, tol); }
+    Davidson(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-4, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const Hamiltonian &H, int _n = 1, double _tol = 1.e-4, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(H, n, vmax, nrestart, tol); }
 
-    Davidson(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
+    Davidson(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-4, int _vmax = 25, int _nrestart = 5) : n{_n}, tol{_tol}, vmax{_vmax}, nrestart{_nrestart} { run(A, n, vmax, nrestart, tol); }
 
     const Eigen::VectorXd &eigenvalues() const { return Values; }
     const Eigen::MatrixXd &eigenvectors() const { return Vectors; }
 
-    int run(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) 
+    int run(const Eigen::MatrixXd &A, int _n = 1, double _tol = 1.e-4, int _vmax = 25, int _nrestart = 5) 
     {
         MatrixMult Mat(A);
         return run(Mat, _n, _tol, _vmax, _nrestart);
     }
 
-    int run(const Hamiltonian &H, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) 
+    int run(const Hamiltonian &H, int _n = 1, double _tol = 1.e-4, int _vmax = 25, int _nrestart = 5) 
     {
         DirectMatrixMult Mat(H);
         return run(Mat, _n, _tol, _vmax, _nrestart);
     }
 
-    int run(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-6, int _vmax = 25, int _nrestart = 5) 
+    int run(const AbstractMatrixMult &A, int _n = 1, double _tol = 1.e-4, int _vmax = 25, int _nrestart = 5) 
     {
         n = _n;
         vmax = _vmax;
         nrestart = _nrestart;
         tol = _tol;
+        assert(n < nrestart);
         int dim = A.dimension();
 
         //make room for solution
@@ -142,7 +143,7 @@ class Davidson
         Values.setZero(n);
 
         //if small problem
-        if (dim < vmax)
+        if (dim < 100)
         {
             Eigen::MatrixXd Aprime;
             A.matrix(Aprime);
@@ -172,7 +173,7 @@ class Davidson
         }
         double target = V.col(0).adjoint() * AV.col(0); //target will always be ground state
 
-        Eigen::VectorXd old_Theta = Eigen::VectorXd::Constant(n, 1000000);
+        //Eigen::VectorXd old_Theta = Eigen::VectorXd::Constant(1000000, n);
         double old_rNorm = 1000000;
         for (int iter = 1; iter <= 50; iter++)
         {    
@@ -207,19 +208,21 @@ class Davidson
             Eigen::MatrixXd Delta = Eigen::MatrixXd::Zero(dim, n);
             Eigen::MatrixXd HDelta = Eigen::MatrixXd::Zero(dim, n);
 
+            Eigen::VectorXd rNorm(n);
             for (int i = 0; i < n; i++)
             {
                 //residual
                 Eigen::VectorXd r = AU.col(i) - Theta(i) * U.col(i);
+                rNorm(i) = r.norm();
+                
 
                 if (i == 0) //target will always be ground state
                 {
                     //update target
-                    double rNorm = r.norm();
-                    if (rNorm < old_rNorm)
+                    if (rNorm(i) < old_rNorm)
                     {
                         target = Theta(i);
-                        old_rNorm = rNorm;
+                        old_rNorm = rNorm(i);
                     }
                 }
                 
@@ -232,6 +235,7 @@ class Davidson
                 Delta.col(i) = delta;
                 HDelta.col(i) = Hdelta;
             }
+        std::cout << rNorm.transpose() << std::endl;
 
             //grow subspace and append vectors
             V.conservativeResize(dim, subdim + n);
@@ -240,14 +244,14 @@ class Davidson
             AV.block(0, subdim, dim, n) = HDelta;
 
             //check for convergence
-        //std::cout << (Theta - old_Theta).squaredNorm() << std::endl;
-            if ((Theta - old_Theta).squaredNorm() < tol)
+            bool converged = true;
+            for (int i = 0; i < n; i++) { converged &= (rNorm[i] < tol * std::pow(10, i)); }
+            if (converged)
             {
                 Values = Theta;
                 Vectors = U;
                 return iter;
             }
-            old_Theta = Theta;
 
         }
         //failed

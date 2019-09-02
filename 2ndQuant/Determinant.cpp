@@ -4,8 +4,6 @@
 #include <string>
 #include <functional>
 
-using namespace std;
-
 //initialize static variables
 void InitDetVars(int spin, int nelec, int norb)
 {

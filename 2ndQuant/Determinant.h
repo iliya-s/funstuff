@@ -1,5 +1,6 @@
 #ifndef DETERMINANT_HEADER
 #define DETERMINANT_HEADER
+#include "Integrals.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 
@@ -88,21 +89,24 @@ class Determinant
     void OpenClosed(std::array<std::vector<int>, 2> &open, std::array<std::vector<int>, 2> &closed) const;
 
     //write and read
-    void write(std::string filename = "Determinant.bkp");
+    void write(std::string filename = "Determinant.bkp") const;
     void read(std::string filename = "Determinant.bkp");
     
     void HartreeFock(); //hartree fock determinant, sets lowest indexed nalpha and nbeta orbitals to occupied
     void vacuum(); //vacuum vector, sets all orbitals to unoccupied and the coefficient to 1.0
     void zero(); //zero, sets all orbitals to unoccupied and sets coefficient to 0.0
-    //generates all connected determinants from a given det, ie d + single excitations + double excitations
-    int numConnected() const;
-    void connected(std::vector<Determinant> &dets) const;
-    //generates all singly connected determinants from a given det, ie single excitations
-    int numSinglyConnected() const;
-    void singlyConnected(std::vector<Determinant> &dets) const;
-    //generates all doubly connected determinants from a given det, ie double excitations
-    int numDoublyConnected() const;
-    void doublyConnected(std::vector<Determinant> &dets) const;
+
+    //generates excitations
+    int nSingleExcitations() const;
+    void singleExcitations(std::vector<Determinant> &dets) const;
+    int nDoubleExcitations() const;
+    void doubleExcitations(std::vector<Determinant> &dets) const;
+    int nExcitations() const;
+    void excitations(std::vector<Determinant> &dets) const;
+    //generates screened excitations
+    void screenedSingleExcitations(const Integral::HeatBath::OneElectron &HBI1, std::vector<Determinant> &dets, double epsilon = 1.e-8) const;
+    void screenedDoubleExcitations(const Integral::HeatBath::TwoElectron &HBI2, std::vector<Determinant> &dets, double epsilon = 1.e-8) const;
+    void screenedExcitations(const Integral::HeatBath::OneElectron &HBI1, const Integral::HeatBath::TwoElectron &HBI2, std::vector<Determinant> &dets, double epsilon = 1.e-8) const;
 
     //friend functions for hamiltonian overlap
     friend class Hamiltonian;

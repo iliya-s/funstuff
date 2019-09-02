@@ -1,4 +1,4 @@
-from pyscf import gto, scf, tools
+from pyscf import gto, scf, tools, fci
 import numpy as np
 import sys
 
@@ -31,3 +31,7 @@ mol.build()
 mf = scf.RHF(mol)
 mf.kernel()
 tools.fcidump.from_scf(mf, 'FCIDUMP')
+
+print("\n\n")
+ci = fci.FCI(mol, mf.mo_coeff)
+print(ci.kernel())
