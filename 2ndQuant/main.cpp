@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
         Determinant hf;
         hf.HartreeFock();
         std::vector<Determinant> V;
-        hf.connected(V);
+        hf.excitations(V);
         cout << V.size() << endl;
         /*
         for (int i = 0; i < V.size(); i++)
@@ -524,5 +524,58 @@ int main(int argc, char *argv[])
         cout << "Direct mult" << std::endl;
         cout << direct.transpose() << endl;
         */
+    }
+    {
+        cout << endl << endl;
+        Hamiltonian H;
+        //Integral::OneElectron I1;
+        //Integral::TwoElectron I2;
+        //double core_e;
+        //int norb, nelec, nalpha, nbeta, sz;
+        //std::vector<int> irrep;
+        //ReadFCIDUMP("FCIDUMP", I1, I2, core_e, norb, nelec, nalpha, nbeta, sz, irrep);
+        //InitDetVars(sz, nelec, norb);
+        //Integral::HeatBath::OneElectron HBI1(I1, I2);
+        //Integral::HeatBath::TwoElectron HBI2(I1, I2);
+
+        /*
+        for (auto it = HBI1.Store.begin(); it != HBI1.Store.end(); it++)
+        {
+            int i = it->first;
+            auto temp = it->second;
+            for (auto it1 = temp.begin(); it1 != temp.end(); it1++)
+            {
+                float val = it1->first;
+                int j = it1->second;
+                cout << i << " -> " << j << " = " << val << endl;
+            }
+            cout << endl;
+        }
+        cout << endl;
+
+        for (auto it = HBI2.Store.begin(); it != HBI2.Store.end(); it++)
+        {
+            auto ij = it->first;
+            auto temp = it->second;
+            for (auto it1 = temp.begin(); it1 != temp.end(); it1++)
+            {
+                float val = it1->first;
+                auto ab = it1->second;
+                cout << ij.first << " " << ij.second << " -> " << ab.first << " " << ab.second << " = " << val << endl;
+            }
+            cout << endl;
+        }
+        cout << endl;
+        */
+
+        Determinant hf;
+        hf.HartreeFock();
+        std::vector<Determinant> dets, Sdets;
+        hf.excitations(dets);
+        hf.screenedExcitations(H.heatBathOneElectron(), H.heatBathTwoElectron(), Sdets, 0.0);
+        cout << dets.size() << " " << Sdets.size() << endl;
+
+
+
     }
 }

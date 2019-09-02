@@ -27,23 +27,37 @@ class Hamiltonian
     std::vector<int> irrep;
     Integral::OneElectron I1;
     Integral::TwoElectron I2;
+    Integral::HeatBath::OneElectron HBI1;
+    Integral::HeatBath::TwoElectron HBI2;
     mutable std::unordered_map<std::size_t, double, HashKey> Hii;  //hashtable to store diagonal values
     mutable std::unordered_map<std::size_t, double, HashKey> Hia;  //hashtable to store singly connected values
     std::unique_ptr<FockVector> V; //current variational space of Hamiltonian
 
     public:
+    //constructor
     Hamiltonian(std::string filename = "FCIDUMP")
     {
         ReadFCIDUMP(filename, I1, I2, core_e, norb, nelec, nalpha, nbeta, sz, irrep);
         InitDetVars(sz, nelec, norb);
+        HBI1.init(I1, I2);
+        HBI2.init(I1, I2);
     }
 
+    //returns integrals
+    const Integral::OneElectron &oneElectron() const { return I1; }
+    const Integral::TwoElectron &twoElectron() const { return I2; }
+    const Integral::HeatBath::OneElectron &heatBathOneElectron() const { return HBI1; }
+    const Integral::HeatBath::TwoElectron &heatBathTwoElectron() const { return HBI2; }
+
+    //functions for Hamiltonian hashtable
     void clear() const { Hii.clear(); Hia.clear(); } //clears hashtables 
     std::size_t size() const { return Hii.size() + Hia.size(); } //returns size of hashtables
 
+    //functions for variational space
     std::size_t dimension() const { return V->size(); } //returns dimension of variational space
-    void space(const FockVector &CI) { V = std::make_unique<FockVector>(CI); }
+    void space(const FockVector &CI) { V = std::make_unique<FockVector>(CI); } //sets variational space
 
+    //energy of determinant
     double energy(const Determinant &D) const
     {
         double E = 0.0;
@@ -89,6 +103,7 @@ class Hamiltonian
         return E;
     }
 
+    //matrix element between two determinants
     double operator()(const Determinant &LHS, const Determinant &RHS) const
     {
         double H = 0.0;
@@ -188,49 +203,6 @@ class Hamiltonian
         }
     }
 
-    /*
-    void multiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
-    {
-        assert(V != nullptr);
-        assert(V->size() == z.rows());
-        Hz.setZero(z.rows());
-        int i = 0;
-        for (auto row = V->begin(); row != V->end(); ++row)
-        {
-            int j = 0;
-            for (auto col = V->begin(); col != V->end(); ++col)
-            {
-                Hz(i) += (*this)(row->second, col->second) * z(j);
-                j++;
-            }
-            i++;
-        }
-    }    
-
-    void Fmultiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
-    {
-        assert(V != nullptr);
-        assert(V->size() == z.rows());
-        V->update(z);
-        Hz.setZero(z.rows());
-        int i = 0;
-        for (auto row = V->begin(); row != V->end(); ++row)
-        {
-            int j = 0;
-            std::vector<Determinant> dets;
-            row->second.connected(dets);
-            for (auto col = dets.begin(); col != dets.end(); ++col)
-            {
-                double val = V->at(*col);
-                if (val != 0.0) { Hz(i) += (*this)(row->second, *col) * val; }
-                j++;
-            }
-            i++;
-        }
-        V->ones();
-    }    
-    */
-
     void multiply(const Eigen::VectorXd &z, Eigen::VectorXd &Hz) const
     {
         assert(V != nullptr);
@@ -239,7 +211,7 @@ class Hamiltonian
         Determinant det;
         det.HartreeFock();
     
-        if (V->size() <= det.numConnected()) //if the fock space is on the order of the number of connections, normal matrix multiplication
+        if (V->size() <= det.nExcitations() + 1) //if the fock space is on the order of the number of connections, normal matrix multiplication
         {
             int i = 0;
             for (auto row = V->begin(); row != V->end(); ++row)
@@ -260,7 +232,9 @@ class Hamiltonian
             for (auto row = V->begin(); row != V->end(); ++row)
             {
                 std::vector<Determinant> dets;
-                row->second.connected(dets);
+                dets.push_back(row->second);
+                //row->second.excitations(dets);
+                row->second.screenedExcitations(HBI1, HBI2, dets);
                 for (int j = 0; j < dets.size(); j++)
                 {
                     double val = V->at(dets[j]);
@@ -280,7 +254,7 @@ class Hamiltonian
         Determinant det;
         det.HartreeFock();
     
-        if (V->size() <= det.numConnected()) //if the fock space is on the order of the number of connections, normal matrix multiplication
+        if (V->size() <= det.nExcitations() + 1) //if the fock space is on the order of the number of excitations, normal matrix multiplication
         {
             int i = 0;
             for (auto row = V->begin(); row != V->end(); ++row)
@@ -301,7 +275,8 @@ class Hamiltonian
             for (auto row = V->begin(); row != V->end(); ++row)
             {
                 std::vector<Determinant> dets;
-                row->second.connected(dets);
+                dets.push_back(row->second);
+                row->second.excitations(dets);
                 for (auto col = dets.begin(); col != dets.end(); ++col)
                 {
                     double val = V->at(*col);
@@ -316,5 +291,4 @@ class Hamiltonian
 
 
 };
-
 #endif

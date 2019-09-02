@@ -7,6 +7,99 @@
 #include <boost/mpi.hpp>
 #endif
 
+namespace Integral
+{
+    namespace HeatBath
+    {
+        void OneElectron::init(const Integral::OneElectron &I1, const Integral::TwoElectron &I2)
+        {
+            int norb = I1.norb();
+            for (int sz = 0; sz < 2; sz++)
+            {
+                for (int i = 0; i < norb; i++)
+                {
+                    std::multimap<float, int, std::greater<float>> temp;
+                    for (int a = 0; a < norb; a++)
+                    {
+                        if (i == a) { continue; }
+
+                        //one electron operator
+                        float H = I1(i, a);
+
+                        //two electron operator
+                        for (int r = 0; r < 2 * norb; r++)
+                        {
+                            int sr = r % 2;  
+                            int orbr = r / 2;
+
+                            H += I2(i, a, orbr, orbr);
+                            if (sz == sr) { H -= I2(i, orbr, orbr, a); }
+                        }
+
+                        int so_a = 2 * a + sz;
+                        temp.insert(std::make_pair(std::abs(H), so_a));
+                    }
+                    int so_b = 2 * i + sz;
+                    Store[so_b] = temp;
+                }
+            }
+        } //init
+
+        void TwoElectron::init(const Integral::OneElectron &I1, const Integral::TwoElectron &I2)
+        {
+            int norb = I1.norb();
+            for (int sz = 0; sz < 2; sz++) //like spin
+            {
+                for (int i = 0; i < norb; i++)
+                {
+                    for (int j = i + 1; j < norb; j++)
+                    {
+                        std::multimap<float, std::pair<int, int>, std::greater<float>> temp;
+                        for (int a = 0; a < norb; a++)
+                        {
+                            for (int b = a + 1; b < norb; b++)
+                            {
+                                if (i == a || j == b) { continue; }
+
+                                double H = I2(i, a, j, b) - I2(i, b, j, a);
+                                int so_a = 2 * a + sz;
+                                int so_b = 2 * b + sz;
+                                temp.insert(std::make_pair(std::abs(H), std::make_pair(so_a, so_b)));
+                            }
+                        }
+                        int so_i = std::min(2 * i + sz, 2 * j + sz);
+                        int so_j = std::max(2 * i + sz, 2 * j + sz);
+                        Store[std::make_pair(so_i, so_j)] = temp;
+                    }
+                }
+            }
+            for (int i = 0; i < norb; i++) //differing spin, i and a are alpha, j and b are beta
+            {
+                for (int j = 0; j < norb; j++)
+                {
+                    std::multimap<float, std::pair<int, int>, std::greater<float>> temp;
+                    for (int a = 0; a < norb; a++)
+                    {
+                        for (int b = 0; b < norb; b++)
+                        {
+                            if (i == a || j == b) { continue; }
+
+                            double H = I2(i, a, j, b); 
+                            int so_a = std::min(2 * a + 0, 2 * b + 1);;
+                            int so_b = std::max(2 * a + 0, 2 * b + 1);;
+                            temp.insert(std::make_pair(std::abs(H), std::make_pair(so_a, so_b)));
+                        }
+                    }
+                    int so_i = std::min(2 * i + 0, 2 * j + 1);
+                    int so_j = std::max(2 * i + 0, 2 * j + 1);
+                    Store[std::make_pair(so_i, so_j)] = temp;
+                }
+            }
+        } //init
+
+    }
+}
+
 void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoElectron &I2, double &core_e, int &norb, int &nelec, int &nalpha, int &nbeta, int &sz, std::vector<int> &irrep)
 {
     std::ifstream f(FCIDUMP);

@@ -125,9 +125,9 @@ class CISVector: public FockVector
         hf.HartreeFock();
         insert(hf);
         std::vector<Determinant> dets;
-        hf.singlyConnected(dets);
+        hf.singleExcitations(dets);
         for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
-        assert((hf.numSinglyConnected() + 1) == Store.size());
+        assert(hf.nSingleExcitations() + 1 == Store.size());
     }
 };
 
@@ -142,9 +142,9 @@ class CIDVector: public FockVector
         hf.HartreeFock();
         insert(hf);
         std::vector<Determinant> dets;
-        hf.doublyConnected(dets);
+        hf.doubleExcitations(dets);
         for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
-        assert((hf.numDoublyConnected() + 1) == Store.size());
+        assert(hf.nDoubleExcitations() + 1 == Store.size());
     }
 };
 
@@ -157,10 +157,11 @@ class CISDVector: public FockVector
     {
         Determinant hf;
         hf.HartreeFock();
+        insert(hf);
         std::vector<Determinant> dets;
-        hf.connected(dets);
+        hf.excitations(dets);
         for (int i = 0; i < dets.size(); i++) { insert(dets[i]); } 
-        assert(hf.numConnected() == Store.size());
+        assert(hf.nExcitations() + 1 == Store.size());
     }
 };
 #endif

@@ -298,7 +298,7 @@ void Determinant::OpenClosed(std::array<std::vector<int>, 2> &open, std::array<s
 }
 
 //write and read
-void Determinant::write(std::string filename)
+void Determinant::write(std::string filename) const
 {
     std::ofstream ofs(filename, std::ios::binary);
     boost::archive::binary_oarchive save(ofs);
@@ -343,125 +343,21 @@ void Determinant::zero()
     }
 }
 
-//generates all connected determinants from a given det, ie d + single excitations + double excitations
-int Determinant::numConnected() const
-{
-    int num = 1; //self
-    std::array<std::vector<int>, 2> open, closed;
-    OpenClosed(open, closed);
-    //single excitations
-    for (int sz = 0; sz < 2; sz++) { num += closed[sz].size() * open[sz].size(); }
-
-    //double excitations
-    for (int sz = 0; sz < 2; sz++) //like spin
-    {
-        int pickclosed = closed[sz].size() * (closed[sz].size() - 1) / 2;
-        int pickopen = open[sz].size() * (open[sz].size() - 1) / 2;
-        num +=  pickclosed * pickopen;
-    }
-    //differing spin
-    int pickclosed = closed[0].size() * closed[1].size();
-    int pickopen = open[0].size() * open[1].size();    
-    num += pickclosed * pickopen;
-    return num;
-}
-
-void Determinant::connected(std::vector<Determinant> &dets) const
-{
-    dets.clear();
-    Determinant dcopy(*this);
-    dcopy.coeff(1.0);
-    std::array<std::vector<int>, 2> open, closed;
-    dcopy.OpenClosed(open, closed);
-
-    //self
-    dets.push_back(dcopy);
-
-    //single excitations
-    for (int sz = 0; sz < 2; sz++)
-    {
-        for (int i = 0; i < closed[sz].size(); i++)
-        {
-            for (int a = 0; a < open[sz].size(); a++)
-            {
-                int p = closed[sz][i];
-                int q = open[sz][a];
-                Determinant dexcite(dcopy);
-                dexcite.set(p, sz, false);
-                dexcite.set(q, sz, true); 
-                dets.push_back(dexcite);
-            }
-        }
-    }
-    
-    //double excitations
-    for (int sz = 0; sz < 2; sz++) //like spin
-    {
-        for (int i = 0; i < closed[sz].size(); i++)
-        {
-            for (int j = i + 1; j < closed[sz].size(); j++)
-            {
-                for (int a = 0; a < open[sz].size(); a++)
-                {
-                    for (int b = a + 1; b < open[sz].size(); b++)
-                    {
-                        int p = closed[sz][i];
-                        int q = closed[sz][j];
-                        int r = open[sz][a];
-                        int s = open[sz][b];
-                        Determinant dexcite(dcopy);
-                        dexcite.set(p, sz, false);
-                        dexcite.set(q, sz, false); 
-                        dexcite.set(r, sz, true);
-                        dexcite.set(s, sz, true); 
-                        dets.push_back(dexcite);
-                    }
-                }
-            }
-        }
-    }
-    for (int i = 0; i < closed[0].size(); i++) //differing spin
-    {
-        for (int j = 0; j < closed[1].size(); j++)
-        {
-            for (int a = 0; a < open[0].size(); a++)
-            {
-                for (int b = 0; b < open[1].size(); b++)
-                {
-                    int p = closed[0][i];
-                    int q = closed[1][j];
-                    int r = open[0][a];
-                    int s = open[1][b];
-                    Determinant dexcite(dcopy);
-                    dexcite.set(p, 0, false);
-                    dexcite.set(q, 1, false); 
-                    dexcite.set(r, 0, true);
-                    dexcite.set(s, 1, true); 
-                    dets.push_back(dexcite);
-                }
-            }
-        }
-    }
-}
-
-//generates all singly connected determinants from a given det, ie single excitations
-int Determinant::numSinglyConnected() const
+//generates excitations
+int Determinant::nSingleExcitations() const
 {
     int num = 0;
     std::array<std::vector<int>, 2> open, closed;
     OpenClosed(open, closed);
-    //single excitations
     for (int sz = 0; sz < 2; sz++) { num += closed[sz].size() * open[sz].size(); }
     return num;
 }
 
-void Determinant::singlyConnected(std::vector<Determinant> &dets) const
+void Determinant::singleExcitations(std::vector<Determinant> &dets) const
 {
-    dets.clear();
     std::array<std::vector<int>, 2> open, closed;
     OpenClosed(open, closed);
 
-    //single excitations
     for (int sz = 0; sz < 2; sz++)
     {
         for (int i = 0; i < closed[sz].size(); i++)
@@ -479,14 +375,12 @@ void Determinant::singlyConnected(std::vector<Determinant> &dets) const
     }    
 }
 
-//generates all doubly connected determinants from a given det, ie double excitations
-int Determinant::numDoublyConnected() const
+int Determinant::nDoubleExcitations() const
 {
     int num = 0;
     std::array<std::vector<int>, 2> open, closed;
     OpenClosed(open, closed);
 
-    //double excitations
     for (int sz = 0; sz < 2; sz++) //like spin
     {
         int pickclosed = closed[sz].size() * (closed[sz].size() - 1) / 2;
@@ -500,13 +394,11 @@ int Determinant::numDoublyConnected() const
     return num;
 }
 
-void Determinant::doublyConnected(std::vector<Determinant> &dets) const
+void Determinant::doubleExcitations(std::vector<Determinant> &dets) const
 {
-    dets.clear();
     std::array<std::vector<int>, 2> open, closed;
     OpenClosed(open, closed);
 
-    //double excitations
     for (int sz = 0; sz < 2; sz++) //like spin
     {
         for (int i = 0; i < closed[sz].size(); i++)
@@ -555,6 +447,76 @@ void Determinant::doublyConnected(std::vector<Determinant> &dets) const
         }
     }
 }
+
+int Determinant::nExcitations() const { return nSingleExcitations() + nDoubleExcitations(); }
+
+void Determinant::excitations(std::vector<Determinant> &dets) const
+{
+    singleExcitations(dets);
+    doubleExcitations(dets);
+}
+
+void Determinant::screenedSingleExcitations(const Integral::HeatBath::OneElectron &HBI1, std::vector<Determinant> &dets, double epsilon) const
+{
+    std::vector<int> open, closed;
+    OpenClosed(open, closed);
+    for (int i = 0; i < closed.size(); i++)
+    {
+        for (auto it = HBI1.begin(closed[i]); it != HBI1.end(closed[i]); ++it)
+        {
+            double val = it->first;
+            int a = it->second;
+            if ((*this)(a)) { continue; }
+            if (val < epsilon) { break; }
+            else
+            {
+                Determinant dexcite(*this);
+                dexcite.set(closed[i], false);
+                dexcite.set(a, true);
+                dets.push_back(dexcite);
+            }
+        }
+    }
+}
+
+void Determinant::screenedDoubleExcitations(const Integral::HeatBath::TwoElectron &HBI2, std::vector<Determinant> &dets, double epsilon) const
+{
+    std::vector<int> open, closed;
+    OpenClosed(open, closed);
+    for (int i = 0; i < closed.size(); i++)
+    {
+        for (int j = i + 1; j < closed.size(); j++)
+        {
+            auto ij = std::make_pair(closed[i], closed[j]);
+            for (auto it = HBI2.begin(ij); it != HBI2.end(ij); ++it)
+            {
+                double val = it->first;
+                auto ab = it->second;
+                int a = ab.first;
+                int b = ab.second;
+                if ((*this)(a) || (*this)(b)) { continue; }
+                if (val < epsilon) { break; }
+                else
+                {
+                    Determinant dexcite(*this);
+                    dexcite.set(closed[i], false);
+                    dexcite.set(closed[j], false);
+                    dexcite.set(a, true);
+                    dexcite.set(b, true);
+                    dets.push_back(dexcite);
+                }
+            }
+        }
+    }
+
+}
+
+void Determinant::screenedExcitations(const Integral::HeatBath::OneElectron &HBI1, const Integral::HeatBath::TwoElectron &HBI2, std::vector<Determinant> &dets, double epsilon) const
+{
+    screenedSingleExcitations(HBI1, dets, epsilon);
+    screenedDoubleExcitations(HBI2, dets, epsilon);
+}
+
 
 //calculates the number of different occupied orbitals between two determinants
 int NumDiffOrbs(const Determinant &LHS, const Determinant &RHS)

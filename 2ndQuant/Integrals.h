@@ -1,6 +1,8 @@
 #ifndef INTEGRALS_HEADER_H
 #define INTEGRALS_HEADER_H
 #include <algorithm>
+#include <vector>
+#include <map>
 #include <Eigen/Dense>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -18,6 +20,8 @@ namespace Integral
         int Norb;
     
         public:
+        OneElectron() {}
+        OneElectron(int norb) { init(norb); }
         inline void init(int norb)
         { 
             Norb = norb;
@@ -41,6 +45,8 @@ namespace Integral
         int Norb;
     
         public:
+        TwoElectron() {}
+        TwoElectron(int norb, int ksym = false) { init(norb, ksym); }
         inline void init(int norb, bool ksym)
         {
             Norb = norb;
@@ -89,13 +95,36 @@ namespace Integral
     {
         class OneElectron
         {
+            private:
+            std::map<int, std::multimap<float, int, std::greater<float>>> Store;
 
+            public:
+            OneElectron() {}
+            OneElectron(const Integral::OneElectron &I1, const Integral::TwoElectron &I2) { init(I1, I2); }
+            void init(const Integral::OneElectron &I1, const Integral::TwoElectron &I2);
+
+            auto begin(int i) { return Store.at(i).begin(); }
+            auto end(int i) { return Store.at(i).end(); }
+            auto begin(int i) const { return Store.at(i).begin(); }
+            auto end(int i) const { return Store.at(i).end(); }            
         };
         
         class TwoElectron
         {
+            private:
+            std::map<std::pair<int, int>, std::multimap<float, std::pair<int, int>, std::greater<float>>> Store;
 
+            public:
+            TwoElectron() {}
+            TwoElectron(const Integral::OneElectron &I1, const Integral::TwoElectron &I2) { init(I1, I2); }
+            void init(const Integral::OneElectron &I1, const Integral::TwoElectron &I2);
+
+            auto begin(std::pair<int, int> ij) { return Store.at(ij).begin(); }
+            auto end(std::pair<int, int> ij) { return Store.at(ij).end(); }
+            auto begin(std::pair<int, int> ij) const { return Store.at(ij).begin(); }
+            auto end(std::pair<int, int> ij) const { return Store.at(ij).end(); }            
         };
+
     }
 }
 
