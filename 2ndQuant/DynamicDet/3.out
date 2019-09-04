@@ -1,0 +1,171 @@
+2 in bits: 0000000000000000000000000000000000000000000000000000000000000010
+-2 in bits: 1111111111111111111111111111111111111111111111111111111111111110
+194982 in bits: 0000000000000000000000000000000000000000000000101111100110100110
+-194982 in bits: 1111111111111111111111111111111111111111111111010000011001011010
+194982 xor -194982: 0000000000000000000000000000000000000000000000000000000000000010
+194982 xor (194982 and -194982):0000000000000000000000000000000000000000000000101111100110100100
+__builtin_ctzl(194982) = 1
+Determinant
+set orbital 3alpha
+0
+1
+1 | 0 0 0 a   0 0 0 0   >
+
+Hartree Fock
+1 | 0 0 0 0   0 0 0 0   >
+1 | 2 2 2 2   2 0 0 0   >
+Overlap
+1 1
+
+save and write
+1 | 2 2 2 2   2 0 0 0   >
+
+Count set orbs and parity
+6
+1
+7
+-1
+
+3 | 2 2 2 2   2 0 0 0   >
+
+1.5 | 2 2 2 2   2 0 0 0   >
+6 | 2 2 2 2   2 0 0 0   >
+3
+9
+
+
+LadderOperators
+1 | 2 2 2 2   2 0 0 0   >
+-1 | a 2 2 2   2 0 0 0   >
+1 | a 2 2 2   2 0 0 a   >
+NumberOperators
+1 | 2 2 2 2   2 0 0 0   >
+10 | 2 2 2 2   2 0 0 0   >
+ExcitationOperators
+Single Excitation
+D 1 | 2 2 2 2   2 0 0 0   >
+L -1 | 2 2 2 2   b b 0 0   >
+8 11
+Double Excitation
+D 1 | 2 2 2 2   2 0 0 0   >
+L 1 | 2 2 2 b   b b 0 b   >
+6 8 11 15
+
+FCI-vector
+
+alpha comb
+6
+
+01
+02
+03
+12
+13
+23
+
+beta comb
+4
+
+012
+013
+023
+123
+
+3136
+generating connected determinants
+561
+
+
+CIS with direct Davidson
+hf det and energy
+-128.474 | 2 2 2 2   2 0 0 0   0 >
+size of fock space: 41
+1
+-128.474
+2
+-128.474
+number of iterations: 2
+
+
+Ground state Energy: -128.474
+residual: 1.04361e-08
+Compactness of Hamiltonian: 0.131469
+total time: 0
+
+Correlation energy
+0
+Davdison correction
+0
+
+CID with direct Davidson
+hf det and energy
+-128.474 | 2 2 2 2   2 0 0 0   0 >
+size of fock space: 521
+1
+-128.474
+2
+-128.585
+3
+-128.587
+4
+-128.587
+number of iterations: 4
+
+
+Ground state Energy: -128.587
+residual: 0.000758741
+Compactness of Hamiltonian: 0.0144451
+total time: 1
+
+Correlation energy
+-0.112659
+Davdison correction
+-0.00222102
+
+CISD with direct Davidson
+hf det and energy
+-128.474 | 2 2 2 2   2 0 0 0   0 >
+size of fock space: 561
+1
+-128.474
+2
+-128.585
+3
+-128.587
+4
+-128.587
+number of iterations: 4
+
+
+Ground state Energy: -128.587
+residual: 0.00198549
+Compactness of Hamiltonian: 0.0172248
+total time: 1
+
+Correlation energy
+-0.1129
+Davdison correction
+-0.0022467
+
+FCI with direct Davidson
+hf det and energy
+-128.474 | 2 2 2 2   2 0 0 0   0 >
+size of fock space: 15876
+1
+-128.474
+2
+-128.585
+3
+-128.59
+4
+-128.591
+number of iterations: 4
+
+
+Ground state Energy: -128.591
+residual: 0.0118998
+Compactness of Hamiltonian: 0.00100924
+total time: 123
+
+Correlation energy
+-0.116915
