@@ -1,0 +1,32 @@
+1012 1012
+read H, S matrices
+
+Lowest eigenpair of H, S
+
+(-14.6029,-0)
+
+residual
+0.000146029
+
+all eigenvalues
+(-14.6029,-0) (-14.5123,0) (-14.4921,0) (-14.4904,-0) (-14.3074,0) (-14.3057,0) (-14.2483,0) (-14.2172,0) (-14.0113,0) (-13.7663,0) 
+
+Time for EigenSolver: 416[s]
+Using Random algorithm
+
+198
+Q
+1012 198
+it worked
+
+Lowest eigenpair of H, S
+
+(-14.603,0)
+
+residual
+0.000176528
+
+all eigenvalues
+(-14.603,0) (-14.5127,0) (-14.492,0) (-14.4906,-0) (-14.3075,0) (-14.3057,0) (-14.2483,0) (-14.2172,0) (-14.04,0) (-13.7639,-0) 
+
+Time for RandSolver: 28[s]

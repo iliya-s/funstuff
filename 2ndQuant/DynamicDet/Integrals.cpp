@@ -116,7 +116,7 @@ void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoEl
 
     std::string line;
     std::vector<std::string> token;
-    while (!f.eof())
+    while (f)
     {
         std::getline(f, line);
         boost::algorithm::trim(line);
@@ -151,7 +151,7 @@ void ReadFCIDUMP(std::string FCIDUMP, Integral::OneElectron &I1, Integral::TwoEl
     I1.init(norb);
     I2.init(norb, ksym);
 
-    while(!f.eof())
+    while (f)
     {
         std::getline(f, line);
         boost::algorithm::trim(line);
