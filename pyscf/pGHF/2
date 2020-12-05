@@ -1,0 +1,459 @@
+#INFO: **** input file is /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/pGHF.py ****
+from pyscf import gto, scf, tools
+import numpy as np
+import scipy.linalg as lalg
+import scipy.optimize as opt
+import sys
+
+def calcOverlap(S, Bra, Ket):
+    ovlpMat = Bra.conj().T.dot(S).dot(Ket)
+    return lalg.det(ovlpMat)
+
+def calcDensityMatrix(S, Bra, Ket):
+    ovlpMat = Bra.conj().T.dot(S).dot(Ket)
+    ovlpInv = lalg.inv(ovlpMat)
+    return Ket.dot(ovlpInv).dot(Bra.conj().T)
+
+def calcHamiltonianMatrixElement(H1, V2, dm1):
+    Hij = np.einsum('pq,qp->', H1, dm1, casting = 'safe')
+    Hij += 0.5 * np.einsum('pqrs,qp,sr->', V2, dm1, dm1, casting = 'safe')
+    Hij -= 0.5 * np.einsum('psrq,qp,sr->', V2, dm1, dm1, casting = 'safe')
+    return Hij
+
+def calcSymmetryProjector(nao, sz, nGrid = 8):
+    Wg = []
+    Rg = []
+    for p in range(nGrid):
+        theta = 2 * np.pi * p / nGrid
+
+        w = np.exp(- 1j * theta * sz) / nGrid
+        Wg.append(w)
+
+        r = lalg.block_diag(np.exp(1j * theta * 0.5) * np.identity(nao), np.exp(1j * theta * (- 0.5)) * np.identity(nao))
+        Rg.append(r)
+    return Wg, Rg
+
+def calcEnergyNumeratorDenominator(S, H1, V2, Bra, Ket, Wg, Rg):
+    #integrate
+    N = 0.0
+    D = 0.0
+    for i in range(len(Wg)):
+        Ketg = Rg[i].dot(Ket)
+
+        #calculate quantities
+        Og = calcOverlap(S, Bra, Ketg)
+
+        dmg = calcDensityMatrix(S, Bra, Ketg)
+        Eg = calcHamiltonianMatrixElement(H1, V2, dmg)
+        Eg = Og * Eg
+
+        #averages
+        D += Wg[i] * Og
+        N += Wg[i] * Eg
+    return N, D
+
+def generateSingleExcitations(ne, nso):
+    hf = [x for x in range(ne)]
+    excitations = []
+    indices = []
+    for i in range(ne):
+        for a in range(ne, nso):
+            #excitation
+            excitations.append([i, a])
+
+            #indices
+            orbs = hf.copy()
+            orbs[i] = a
+            indices.append(orbs)
+    return excitations, indices
+
+def calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+    Npq = np.zeros(S.shape, dtype = complex)
+    Dpq = np.zeros(S.shape, dtype = complex)
+
+    #hf det
+    Psi = mo_coeff[:, 0:nelectron]
+
+    #single excitations
+    excitations, indices = generateSingleExcitations(nelectron, S.shape[0])
+    for n in range(len(excitations)):
+        Psi_n = mo_coeff[:, indices[n]]
+        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi_n, Psi, Wg, Rg)
+
+        Npq[tuple(excitations[n])] = N
+        Dpq[tuple(excitations[n])] = D
+
+    Npq = Npq - Npq.conj().T
+    Dpq = Dpq - Dpq.conj().T
+    return Npq, Dpq
+
+def modifiedGramSchmidt(V, S = None):
+    U = np.zeros(V.shape)
+    if S is None:
+        S = np.identity(U.shape[0])
+
+    for i in range(V.shape[1]):
+        v = V[:, i]
+        for j in range(i):
+            u = U[:, j]
+            ovlp = v.T.dot(S).dot(u)
+            norm2 = u.T.dot(S).dot(u)
+            v = v - u * ovlp / norm2
+
+        norm = v.T.dot(S).dot(v)
+        U[:, i] = v / np.sqrt(norm)
+    return U
+
+
+#the following four functions are helpers to use scipy's optimization library
+
+def real_to_complex(z): # real vector of length 2n -> complex of length n
+    return z[:len(z)//2] + 1j * z[len(z)//2:]
+
+def complex_to_real(z): # complex vector of length n -> real of length 2n
+    return np.concatenate((np.real(z), np.imag(z)))
+
+def fun(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+    vec = real_to_complex(params)
+    K = vec.reshape(S.shape)
+
+    #orbital rotation
+    U = lalg.expm(- K)
+    orbs = mo_coeff.dot(U)
+
+    #wavefunction
+    Psi = orbs[:, 0:nelectron]
+
+    #energy terms
+    N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+    N = np.real(N)
+    D = np.real(D)
+    return N / D
+
+def jac(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+    vec = real_to_complex(params)
+    K = vec.reshape(S.shape)
+
+    #orbital rotation
+    U = lalg.expm(- K)
+    orbs = mo_coeff.dot(U)
+
+    #wavefunction
+    Psi = orbs[:, 0:nelectron]
+
+    #energy terms
+    N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+    N = np.real(N)
+    D = np.real(D)
+
+    #gradient terms
+    Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, orbs, Wg, Rg)
+
+    G = (Npq / D) - (N / D) * (Dpq / D)
+    #G = G - G.conj().T
+    G = G.flatten()
+    return complex_to_real(G)
+
+def pGHF(mol, mo_coeff = None):
+    #basic molecule info and integrals
+    m = float(mol.spin) / 2
+    ne = mol.nelectron
+    nao = mol.nao
+    nso = 2 * mol.nao
+    s = mol.intor('int1e_ovlp')
+    t = mol.intor('int1e_kin')
+    v1 = mol.intor('int1e_nuc')
+    v2 = mol.intor('int2e', aosym='s1')
+
+    #spin integrals
+    S = lalg.block_diag(s, s)
+    h1 = t + v1
+    H1 = lalg.block_diag(h1, h1)
+    V2 = np.zeros((nso, ) * 4)
+    for i in range(nao):
+        for j in range(nao):
+            for k in range(nao):
+                for l in range(nao):
+                    ia = i
+                    ja = j
+                    ka = k
+                    la = l
+
+                    ib = i + nao
+                    jb = j + nao
+                    kb = k + nao
+                    lb = l + nao
+
+                    aaaa = (ia, ja, ka, la)
+                    bbbb = (ib, jb, kb, lb)
+                    aabb = (ia, ja, kb, lb)
+                    bbaa = (ib, jb, ka, la)
+
+                    V2[aaaa] = v2[(i, j, k, l)]
+                    V2[bbbb] = v2[(i, j, k, l)]
+                    V2[aabb] = v2[(i, j, k, l)]
+                    V2[bbaa] = v2[(i, j, k, l)]
+
+    if mo_coeff is None:
+        orbs = np.random.randn(nso, nso)
+        orbs = modifiedGramSchmidt(orbs, S)
+    else:
+        assert(mo_coeff.shape[0] == nso)
+        assert(mo_coeff.shape[1] == nso)
+        orbs = mo_coeff
+
+    #symmetry projector
+    Wg, Rg = calcSymmetryProjector(nao, m, 10)
+
+    Eold = 100
+    dt = 1.0
+    tol = 1.e-10
+    doPrint = True
+    for m in range(1):
+        #current wavefunction
+        Psi = orbs[:, 0:ne]
+
+        #energy terms
+        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+
+        #gradient terms
+        Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, V2, ne, orbs, Wg, Rg)
+
+        #electronic and total energy
+        E = np.real(N) / np.real(D)
+        E0 = E + mol.energy_nuc()
+
+        #gradient
+        G = (Npq / np.real(D)) - E * (Dpq / np.real(D))
+        #G = G - G.conj().T
+        Gvec = G.flatten()
+        Gnorm = lalg.norm(Gvec)
+
+        #scipy optimizer
+        params = np.zeros((2 * nso * nso, ), dtype = float)
+        #print(fun(params, S, H1, V2, ne, orbs, Wg, Rg))
+        #print(jac(params, S, H1, V2, ne, orbs, Wg, Rg))
+        sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'L-BFGS-B', jac = jac)
+        update = real_to_complex(sol.x)
+        update = update.reshape(G.shape)
+
+        #orbital rotation
+        #U = lalg.expm(dt * G)
+        U = lalg.expm(- dt * update)
+        U = np.real(U) #when performing only Sz projection, we want real orbitals
+
+        #update orbitals
+        orbs = orbs.dot(U)
+
+        #update error
+        error = abs(E - Eold)
+        Eold = E
+
+        #print
+        if doPrint == True:
+            print(f"-------------------------------- {m} --------------------------------")
+            print("Projected values")
+
+            print(f"Denominator: {D}")
+            print(f"Numerator: {N}")
+            print(f"Electronic Energy: {E}")
+            print(f"Energy: {E0}")
+
+            print("Gradient")
+            print(G)
+
+            print(f"Norm: {Gnorm}")
+
+            print("\n scipy optimizer solution")
+            print(sol)
+            print("\n")
+
+            print("Orbital Rotation")
+            print(U)
+
+            print("Orbitals")
+            print(orbs)
+
+            print(f"Error: {error}")
+
+        #check for convergence
+        if (error < tol):
+            break
+
+    return E, orbs
+
+
+np.set_printoptions(precision=6)
+np.set_printoptions(suppress=True)
+
+mol = gto.Mole()
+#mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8; H 0 0 4.2'
+mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8;'
+#mol.atom = 'H 0 0 0; H 0 0 1.4'
+#mol.atom = 'H 0 0 0'
+#mol.atom = 'Li 0 0 0'
+#mol.basis = 'sto-3g'
+#mol.basis = '631g'
+#mol.basis = 'ccpvdz'
+mol.verbose = 4
+mol.spin = 1
+mol.unit = 'bohr'
+mol.build()
+
+mf = scf.GHF(mol)
+mf.kernel()
+S = mf.get_ovlp()
+occidx = mf.mo_occ > 0
+occOrb = mf.mo_coeff[:, occidx]
+print(occOrb)
+fock = mf.get_hcore() + mf.get_veff()
+print(fock)
+print("\n")
+
+E0, mo = pGHF(mol, mf.mo_coeff)
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='ubuntu', release='5.4.0-54-generic', version='#60-Ubuntu SMP Fri Nov 6 10:37:59 UTC 2020', machine='x86_64', processor='x86_64')  Threads 3
+Python 3.8.3 (default, May 19 2020, 18:47:26) 
+[GCC 7.3.0]
+numpy 1.19.4  scipy 1.4.1
+Date: Fri Dec  4 20:55:04 2020
+PySCF version 1.7.5
+PySCF path  /home/iliya/miniconda3/lib/python3.8/site-packages/pyscf
+
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 3
+[INPUT] num. electrons = 3
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 1
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = bohr
+[INPUT]  1 H      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 H      0.000000000000   0.000000000000   0.740848095288 AA    0.000000000000   0.000000000000   1.400000000000 Bohr
+[INPUT]  3 H      0.000000000000   0.000000000000   1.481696190576 AA    0.000000000000   0.000000000000   2.800000000000 Bohr
+
+nuclear repulsion = 1.78571428571429
+number of shells = 3
+number of NR pGTOs = 9
+number of NR cGTOs = 3
+basis = sto-3g
+ecp = {}
+CPU time:         0.36
+
+
+******** <class 'pyscf.scf.ghf.GHF'> ********
+method = GHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/tmpl1q0aq1f
+max_memory 4000 MB (current use 73 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -1.30217620639081
+  HOMO = -0.00126233057865572  LUMO = 0.035957068540527
+cycle= 1 E= -1.50101060650032  delta_E= -0.199  |g|= 0.0965  |ddm|= 1.14
+  HOMO = -0.31610174548598  LUMO = 0.269307349635423
+cycle= 2 E= -1.50811343610013  delta_E= -0.0071  |g|= 0.0396  |ddm|= 0.12
+  HOMO = -0.32951147002  LUMO = 0.288119609185009
+cycle= 3 E= -1.50955627150087  delta_E= -0.00144  |g|= 0.00147  |ddm|= 0.0836
+  HOMO = -0.330466310265984  LUMO = 0.287849557986008
+cycle= 4 E= -1.50955787747012  delta_E= -1.61e-06  |g|= 1.4e-05  |ddm|= 0.00248
+  HOMO = -0.330482266001701  LUMO = 0.287845436957482
+cycle= 5 E= -1.50955787761745  delta_E= -1.47e-10  |g|= 5.59e-06  |ddm|= 1.76e-05
+  HOMO = -0.330491868541459  LUMO = 0.287841873010621
+Extra cycle  E= -1.5095578776409  delta_E= -2.34e-11  |g|= 2.23e-06  |ddm|= 6.95e-06
+converged SCF energy = -1.5095578776409  <S^2> = 0.76511153  2S+1 = 2.0150549
+[[ 0.276174  0.182257 -0.582652]
+ [ 0.299053  0.44801  -0.      ]
+ [ 0.276174  0.182257  0.582652]
+ [ 0.276174 -0.182257 -0.582652]
+ [ 0.299053 -0.44801  -0.      ]
+ [ 0.276174 -0.182257  0.582652]]
+[[-0.348843 -0.586622 -0.333139 -0.195207 -0.043874  0.032468]
+ [-0.586622 -0.547089 -0.586622 -0.043874 -0.001392 -0.043874]
+ [-0.333139 -0.586622 -0.348843  0.032468 -0.043874 -0.195207]
+ [-0.195207 -0.043874  0.032468 -0.348843 -0.586622 -0.333139]
+ [-0.043874 -0.001392 -0.043874 -0.586622 -0.547089 -0.586622]
+ [ 0.032468 -0.043874 -0.195207 -0.333139 -0.586622 -0.348843]]
+
+
+-------------------------------- 0 --------------------------------
+Projected values
+Denominator: (0.49811105878258727+6.938893903907228e-18j)
+Numerator: (-1.6434898604467147-1.5722490792208221e-06j)
+Electronic Energy: -3.29944463482401
+Energy: -1.5137303491097243
+Gradient
+[[ 0.      +0.j        0.      +0.j        0.      +0.j
+  -0.003353-0.011679j  0.011504-0.j        0.061312-0.j      ]
+ [ 0.      +0.j        0.      +0.j        0.      +0.j
+   0.027125+0.014772j  0.051335+0.j        0.02081 -0.j      ]
+ [ 0.      +0.j        0.      +0.j        0.      +0.j
+   0.006246-0.j        0.143873-0.030386j  0.132874+0.035379j]
+ [ 0.003353-0.011679j -0.027125+0.014772j -0.006246-0.j
+   0.      +0.j        0.      +0.j        0.      +0.j      ]
+ [-0.011504-0.j       -0.051335+0.j       -0.143873-0.030386j
+   0.      +0.j        0.      +0.j        0.      +0.j      ]
+ [-0.061312-0.j       -0.02081 -0.j       -0.132874+0.035379j
+   0.      +0.j        0.      +0.j        0.      +0.j      ]]
+Norm: 0.31186676826849347
+
+ scipy optimizer solution
+      fun: -3.29979394725382
+ hess_inv: <72x72 LbfgsInvHessProduct with dtype=float64>
+      jac: array([ 0.      ,  0.      ,  0.      ,  0.003614, -0.046249,  0.09955 ,
+        0.      ,  0.      ,  0.      , -0.158671,  0.086135,  0.020512,
+        0.      ,  0.      ,  0.      , -0.013317,  0.013521,  0.053216,
+       -0.003614,  0.158671,  0.013317,  0.      ,  0.      ,  0.      ,
+        0.046249, -0.086135, -0.013521,  0.      ,  0.      ,  0.      ,
+       -0.09955 , -0.020512, -0.053216,  0.      ,  0.      ,  0.      ,
+        0.      ,  0.      ,  0.      , -0.001138,  0.000067, -0.000004,
+        0.      ,  0.      ,  0.      , -0.002183,  0.000132, -0.000868,
+        0.      ,  0.      ,  0.      , -0.000794,  0.002042, -0.00064 ,
+       -0.001138, -0.002183, -0.000794,  0.      ,  0.      ,  0.      ,
+        0.000067,  0.000132,  0.002042,  0.      ,  0.      ,  0.      ,
+       -0.000004, -0.000868, -0.00064 ,  0.      ,  0.      ,  0.      ])
+  message: b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+     nfev: 52
+      nit: 5
+   status: 0
+  success: True
+        x: array([ 0.      ,  0.      ,  0.      ,  0.000363, -0.000926, -0.007087,
+        0.      ,  0.      ,  0.      , -0.002547, -0.003556, -0.002335,
+        0.      ,  0.      ,  0.      , -0.000401, -0.014355, -0.013768,
+       -0.000363,  0.002547,  0.000401,  0.      ,  0.      ,  0.      ,
+        0.000926,  0.003556,  0.014355,  0.      ,  0.      ,  0.      ,
+        0.007087,  0.002335,  0.013768,  0.      ,  0.      ,  0.      ,
+        0.      ,  0.      ,  0.      ,  0.001204,  0.000002,  0.      ,
+        0.      ,  0.      ,  0.      , -0.001522, -0.000008,  0.000013,
+        0.      ,  0.      ,  0.      ,  0.000004,  0.003117, -0.003589,
+        0.001204, -0.001522,  0.000004,  0.      ,  0.      ,  0.      ,
+        0.000002, -0.000008,  0.003117,  0.      ,  0.      ,  0.      ,
+        0.      ,  0.000013, -0.003589,  0.      ,  0.      ,  0.      ])
+
+
+Orbital Rotation
+[[ 0.999974 -0.000009 -0.000055 -0.000363  0.000926  0.007086]
+ [-0.000009  0.999987 -0.000042  0.002547  0.003556  0.002335]
+ [-0.000055 -0.000042  0.999791  0.000401  0.014354  0.013767]
+ [ 0.000363 -0.002547 -0.000401  0.999995 -0.000007 -0.000004]
+ [-0.000926 -0.003556 -0.014354 -0.000007  0.999885 -0.000101]
+ [-0.007086 -0.002335 -0.013767 -0.000004 -0.000101  0.999871]]
+Orbitals
+[[ 0.282172  0.188227 -0.560925 -0.582509 -0.75425  -0.780704]
+ [ 0.289511  0.440862 -0.033994  0.001019  1.231793  1.186979]
+ [ 0.28253   0.18521   0.603667  0.583255 -0.737533 -0.764667]
+ [ 0.27161  -0.18287  -0.582722  0.581852 -0.755711  0.768726]
+ [ 0.306301 -0.449616 -0.001354 -0.001253  1.228845 -1.182988]
+ [ 0.271123 -0.179951  0.582805 -0.582977 -0.738976  0.784774]]
+Error: 103.29944463482401

@@ -1,0 +1,331 @@
+from pyscf import gto, scf, tools
+import numpy as np
+import scipy.linalg as lalg
+import sys
+
+def calcOverlap(S, Bra, Ket):
+    ovlpMat = Bra.conj().T.dot(S).dot(Ket)
+    return lalg.det(ovlpMat)
+
+def calcDensityMatrix(S, Bra, Ket):
+    ovlpMat = Bra.conj().T.dot(S).dot(Ket)
+    ovlpInv = lalg.inv(ovlpMat)
+    return Ket.dot(ovlpInv).dot(Bra.conj().T)
+
+def calcHamiltonianMatrixElement(H1, V2, dm1):
+    Hij = np.einsum('pq,qp->', H1, dm1, casting = 'safe')
+    Hij += 0.5 * np.einsum('pqrs,qp,sr->', V2, dm1, dm1, casting = 'safe')
+    Hij -= 0.5 * np.einsum('psrq,qp,sr->', V2, dm1, dm1, casting = 'safe')
+    return Hij
+
+def calcEnergyNumeratorDenominator(S, H1, V2, Bra, Ket, Wg, Rg):
+    #integrate
+    N = 0.0
+    D = 0.0
+    for i in range(len(Wg)):
+        Ketg = Rg[i].dot(Ket)
+
+        #calculate quantities
+        Og = calcOverlap(S, Bra, Ketg)
+
+        dmg = calcDensityMatrix(S, Bra, Ketg)
+        Eg = calcHamiltonianMatrixElement(H1, V2, dmg)
+        Eg = Og * Eg
+
+        #averages
+        D += Wg[i] * Og
+        N += Wg[i] * Eg
+
+    return N, D
+
+def generateSingleExcitations(ne, nso):
+    hf = [x for x in range(ne)]
+
+    excitations = []
+    indices = []
+    for i in range(ne):
+        for a in range(ne, nso):
+            #excitation
+            excitations.append([i, a])
+
+            #indices
+            orbs = hf.copy()
+            orbs[i] = a
+            indices.append(orbs)
+
+    return excitations, indices
+
+def generateDoubleExcitations(ne, nso):
+    hf = [x for x in range(ne)]
+
+    excitations = []
+    indices = []
+    for i in range(ne):
+        for j in range(ne):
+            for a in range(ne, nso):
+                for b in range(ne, nso):
+                    #excitation
+                    excitations.append([i, a])
+
+                    #indices
+                    orbs = hf.copy()
+                    orbs[i] = a
+                    indices.append(orbs)
+
+    return excitations, indices
+
+def calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+    Npq = np.zeros(S.shape, dtype = complex)
+    Dpq = np.zeros(S.shape, dtype = complex)
+
+    #hf det
+    hf = [x for x in range(nelectron)]
+    Psi = mo_coeff[:, hf]
+
+    #single excitations
+    excitations, indices = generateSingleExcitations(nelectron, S.shape[0])
+    for n in range(len(excitations)):
+        Psi_n = mo_coeff[:, indices[n]]
+        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi_n, Psi, Wg, Rg)
+
+        Npq[tuple(excitations[n])] = N
+        Dpq[tuple(excitations[n])] = D
+
+    Npq = Npq - Npq.conj().T
+    Dpq = Dpq - Dpq.conj().T
+
+    return Npq, Dpq
+
+def calcLinearMethodMatrices(S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+    #hf det
+    hf = [x for x in range(nelectron)]
+    Psi = mo_coeff[:, hf]
+
+    #singel excitations
+    excitations, indices = generateSingleExcitations(nelectron, S.shape[0])
+    nExcitations = len(excitations)
+
+    A = np.zeros((1 + nExcitations, 1 + nExcitations), dtype = complex)
+    B = np.zeros((1 + nExcitations, 1 + nExcitations), dtype = complex)
+
+    #reference with reference
+    N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+
+    A[0, 0] = N
+    B[0, 0] = D
+
+    #reference with tangent space
+    for n in range(nExcitations):
+        Psi_n = mo_coeff[:, indices[n]]
+        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi_n, Psi, Wg, Rg)
+
+        A[0, 1 + n] = N
+        A[1 + n, 0] = N.conj()
+
+        B[0, 1 + n] = D
+        B[1 + n, 0] = D.conj()
+
+    #tangent space with tangent space
+    for n in range(nExcitations):
+        Psi_n = mo_coeff[:, indices[n]]
+
+        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi_n, Psi_n, Wg, Rg)
+
+        A[1 + n, 1 + n] = N
+        A[1 + n, 1 + n] = N.conj()
+
+        B[1 + n, 1 + n] = D
+        B[1 + n, 1 + n] = D.conj()
+
+        for m in range(n):
+            Psi_m = mo_coeff[:, indices[m]]
+
+            N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi_n, Psi_m, Wg, Rg)
+
+            A[1 + n, 1 + m] = N
+            A[1 + m, 1 + n] = N.conj()
+
+            B[1 + n, 1 + m] = D
+            B[1 + m, 1 + n] = D.conj()
+
+    return A, B
+
+def calcFockMatrix(H1, V2, dm1):
+    F = np.zeros(H1.shape, dtype = complex)
+    F += H1.copy()
+    F += np.einsum('pqrs,sr->pq', V2, dm1, casting = 'safe')
+    F -= np.einsum('pqrs,qr->ps', V2, dm1, casting = 'safe')
+    return F
+
+def modifiedGramSchmidt(V, S = None):
+    U = np.zeros(V.shape)
+    if S is None:
+        S = np.identity(U.shape[0])
+
+    for i in range(V.shape[1]):
+        v = V[:, i]
+        for j in range(i):
+            u = U[:, j]
+            ovlp = v.T.dot(S).dot(u)
+            norm2 = u.T.dot(S).dot(u)
+            v = v - u * ovlp / norm2
+
+        norm = v.T.dot(S).dot(v)
+        U[:, i] = v / np.sqrt(norm)
+
+    return U
+
+def pGHF(mol, mo_coeff = None):
+    #basic molecule info and integrals
+    m = float(mol.spin) / 2
+    ne = mol.nelectron
+    nao = mol.nao
+    nso = 2 * mol.nao
+    s = mol.intor('int1e_ovlp')
+    t = mol.intor('int1e_kin')
+    v1 = mol.intor('int1e_nuc')
+    v2 = mol.intor('int2e', aosym='s1')
+
+    #spin integrals
+    S = lalg.block_diag(s, s)
+    h1 = t + v1
+    H1 = lalg.block_diag(h1, h1)
+    V2 = np.zeros((nso, ) * 4)
+    for i in range(nao):
+        for j in range(nao):
+            for k in range(nao):
+                for l in range(nao):
+                    ia = i
+                    ja = j
+                    ka = k
+                    la = l
+
+                    ib = i + nao
+                    jb = j + nao
+                    kb = k + nao
+                    lb = l + nao
+
+                    aaaa = (ia, ja, ka, la)
+                    bbbb = (ib, jb, kb, lb)
+                    aabb = (ia, ja, kb, lb)
+                    bbaa = (ib, jb, ka, la)
+
+                    V2[aaaa] = v2[(i, j, k, l)]
+                    V2[bbbb] = v2[(i, j, k, l)]
+                    V2[aabb] = v2[(i, j, k, l)]
+                    V2[bbaa] = v2[(i, j, k, l)]
+
+    if mo_coeff is None:
+        orbs = np.random.randn(nso, nso)
+        orbs = modifiedGramSchmidt(orbs, S)
+    else:
+        assert(mo_coeff.shape[0] == nso)
+        assert(mo_coeff.shape[1] == nso)
+        orbs = mo_coeff
+
+    #symmetry projector
+    nGrid = 12
+    Wg = []
+    Rg = []
+    for p in range(nGrid):
+        theta = 2 * np.pi * p / nGrid
+
+        w = np.exp(- 1j * theta * m) / nGrid
+        Wg.append(w)
+
+        r = lalg.block_diag(np.exp(1j * theta * 0.5) * np.identity(nao), np.exp(1j * theta * (- 0.5)) * np.identity(nao))
+        Rg.append(r)
+
+    Eold = 100
+    dt = 1.0
+    tol = 1.e-10
+    doPrint = True
+    for m in range(200):
+
+        #current wavefunction
+        Psi = orbs[:, 0:ne]
+
+        #energy terms
+        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+
+        #gradient terms
+        Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, V2, ne, orbs, Wg, Rg)
+
+
+        #electronic and total energy
+        E0 = N / D
+        E = np.real(E0) + mol.energy_nuc()
+
+        #gradient
+        G = (Npq / D) - (N / D) * (Dpq / D)
+        Gvec = G.flatten()
+        Gnorm = lalg.norm(Gvec)
+
+        #orbital rotation
+        U = lalg.expm(dt * G)
+
+        #update orbitals
+        orbs = orbs.dot(U)
+        orbs = np.real(orbs)
+
+        #update error
+        error = abs(E - Eold)
+        Eold = E
+
+        #print
+        if doPrint == True:
+            print(f"-------------------------------- {m} --------------------------------")
+            print("Projected values")
+
+            print(f"Denominator: {D}")
+            print(f"Numerator: {N}")
+            print(f"Energy: {E}")
+
+            print("Gradient")
+            print(G)
+
+            print(f"Norm: {Gnorm}")
+
+            print("Orbital Rotation")
+            print(U)
+
+            print("Orbitals")
+            print(orbs)
+
+            print(f"Error: {error}")
+
+        #check for convergence
+        if (error < tol):
+            break
+
+    return E, orbs
+
+
+np.set_printoptions(precision=5)
+np.set_printoptions(suppress=True)
+
+mol = gto.Mole()
+#mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8; H 0 0 4.2'
+mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8;'
+#mol.atom = 'H 0 0 0; H 0 0 1.4'
+#mol.atom = 'H 0 0 0'
+#mol.atom = 'Li 0 0 0'
+#mol.basis = 'sto-3g'
+#mol.basis = '631g'
+#mol.basis = 'ccpvdz'
+mol.verbose = 4
+mol.spin = 1
+mol.unit = 'bohr'
+mol.build()
+
+mf = scf.GHF(mol)
+mf.kernel()
+occidx = mf.mo_occ > 0
+occOrb = mf.mo_coeff[:, occidx]
+print(occOrb)
+fock = mf.get_hcore() + mf.get_veff()
+print(fock)
+print("\n")
+#print("\n")
+
+E0, mo = pGHF(mol, mf.mo_coeff)

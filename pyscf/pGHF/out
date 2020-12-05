@@ -1,0 +1,1029 @@
+#INFO: **** input file is /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/pGHF.py ****
+from pyscf import gto, scf, tools
+import numpy as np
+import scipy.linalg as lalg
+import scipy.optimize as opt
+import sys
+
+def calcOverlap(S, Bra, Ket):
+    ovlpMat = Bra.conj().T.dot(S).dot(Ket)
+    return lalg.det(ovlpMat)
+
+def calcDensityMatrix(S, Bra, Ket):
+    ovlpMat = Bra.conj().T.dot(S).dot(Ket)
+    ovlpInv = lalg.inv(ovlpMat)
+    return Ket.dot(ovlpInv).dot(Bra.conj().T)
+
+def calcHamiltonianMatrixElement(H1, V2, dm1):
+    Hij = np.einsum('pq,qp->', H1, dm1, casting = 'safe')
+    Hij += 0.5 * np.einsum('pqrs,qp,sr->', V2, dm1, dm1, casting = 'safe')
+    Hij -= 0.5 * np.einsum('psrq,qp,sr->', V2, dm1, dm1, casting = 'safe')
+    return Hij
+
+def calcSymmetryProjector(nao, sz, nGrid = 8):
+    Wg = []
+    Rg = []
+    for p in range(nGrid):
+        theta = 2 * np.pi * p / nGrid
+
+        w = np.exp(- 1j * theta * sz) / nGrid
+        Wg.append(w)
+
+        r = lalg.block_diag(np.exp(1j * theta * 0.5) * np.identity(nao), np.exp(1j * theta * (- 0.5)) * np.identity(nao))
+        Rg.append(r)
+    return Wg, Rg
+
+def calcEnergyNumeratorDenominator(S, H1, V2, Bra, Ket, Wg, Rg):
+    #integrate
+    N = 0.0
+    D = 0.0
+    for i in range(len(Wg)):
+        Ketg = Rg[i].dot(Ket)
+
+        #calculate quantities
+        Og = calcOverlap(S, Bra, Ketg)
+
+        dmg = calcDensityMatrix(S, Bra, Ketg)
+        Eg = calcHamiltonianMatrixElement(H1, V2, dmg)
+        Eg = Og * Eg
+
+        #averages
+        D += Wg[i] * Og
+        N += Wg[i] * Eg
+    return N, D
+
+def generateSingleExcitations(ne, nso):
+    hf = [x for x in range(ne)]
+    excitations = []
+    indices = []
+    for i in range(ne):
+        for a in range(ne, nso):
+            #excitation
+            excitations.append([i, a])
+
+            #indices
+            orbs = hf.copy()
+            orbs[i] = a
+            indices.append(orbs)
+    return excitations, indices
+
+def calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+    Npq = np.zeros(S.shape, dtype = complex)
+    Dpq = np.zeros(S.shape, dtype = complex)
+
+    #hf det
+    Psi = mo_coeff[:, 0:nelectron]
+
+    #single excitations
+    excitations, indices = generateSingleExcitations(nelectron, S.shape[0])
+    for n in range(len(excitations)):
+        Psi_n = mo_coeff[:, indices[n]]
+        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi_n, Psi, Wg, Rg)
+
+        Npq[tuple(excitations[n])] = N
+        Dpq[tuple(excitations[n])] = D
+    return Npq, Dpq
+
+def modifiedGramSchmidt(V, S = None):
+    U = np.zeros(V.shape)
+    if S is None:
+        S = np.identity(U.shape[0])
+
+    for i in range(V.shape[1]):
+        v = V[:, i]
+        for j in range(i):
+            u = U[:, j]
+            ovlp = v.T.dot(S).dot(u)
+            norm2 = u.T.dot(S).dot(u)
+            v = v - u * ovlp / norm2
+
+        norm = v.T.dot(S).dot(v)
+        U[:, i] = v / np.sqrt(norm)
+    return U
+
+
+#the following four functions are helpers to use scipy's optimization library
+
+def real_to_complex(z): #real vector of length 2n -> complex of length n
+    return z[:len(z)//2] + 1j * z[len(z)//2:]
+
+def complex_to_real(z): #complex vector of length n -> real of length 2n
+    return np.concatenate((np.real(z), np.imag(z)))
+
+def fun(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+    nso = S.shape[0]
+    nao = nso // 2
+
+    #build kappa matrix from params
+    vec = real_to_complex(params)
+    paramMat = vec.reshape((nelectron, nso - nelectron))
+    K = np.zeros(((nso, nso)), dtype = complex)
+    K[0:nelectron, nelectron:nso] = paramMat
+    K = K - K.conj().T
+
+    #orbital rotation
+    U = lalg.expm(- K)
+    orbs = mo_coeff.dot(U)
+
+    #wavefunction
+    Psi = orbs[:, 0:nelectron]
+
+    #energy terms
+    N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+    N = np.real(N)
+    D = np.real(D)
+    return N / D
+
+def jac(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+    nso = S.shape[0]
+    nao = nso // 2
+
+    #build kappa matrix from params
+    vec = real_to_complex(params)
+    paramMat = vec.reshape((nelectron, nso - nelectron))
+    K = np.zeros(((nso, nso)), dtype = complex)
+    K[0:nelectron, nelectron:nso] = paramMat
+    K = K - K.conj().T
+
+    #orbital rotation
+    U = lalg.expm(- K)
+    orbs = mo_coeff.dot(U)
+
+    #wavefunction
+    Psi = orbs[:, 0:nelectron]
+
+    #energy terms
+    N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+    N = np.real(N)
+    D = np.real(D)
+
+    #gradient terms
+    Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, orbs, Wg, Rg)
+
+    G = (Npq / D) - (N / D) * (Dpq / D)
+    G = G[0:nelectron, nelectron:nso]
+    G = G.flatten()
+    return complex_to_real(G)
+
+def pGHF(mol, mo_coeff = None):
+    #basic molecule info and integrals
+    m = float(mol.spin) / 2
+    ne = mol.nelectron
+    nao = mol.nao
+    nso = 2 * mol.nao
+    s = mol.intor('int1e_ovlp')
+    t = mol.intor('int1e_kin')
+    v1 = mol.intor('int1e_nuc')
+    v2 = mol.intor('int2e', aosym='s1')
+
+    #spin integrals
+    S = lalg.block_diag(s, s)
+    h1 = t + v1
+    H1 = lalg.block_diag(h1, h1)
+    V2 = np.zeros((nso, ) * 4)
+    for i in range(nao):
+        for j in range(nao):
+            for k in range(nao):
+                for l in range(nao):
+                    ia = i
+                    ja = j
+                    ka = k
+                    la = l
+
+                    ib = i + nao
+                    jb = j + nao
+                    kb = k + nao
+                    lb = l + nao
+
+                    aaaa = (ia, ja, ka, la)
+                    bbbb = (ib, jb, kb, lb)
+                    aabb = (ia, ja, kb, lb)
+                    bbaa = (ib, jb, ka, la)
+
+                    V2[aaaa] = v2[(i, j, k, l)]
+                    V2[bbbb] = v2[(i, j, k, l)]
+                    V2[aabb] = v2[(i, j, k, l)]
+                    V2[bbaa] = v2[(i, j, k, l)]
+
+    if mo_coeff is None:
+        orbs = np.random.randn(nso, nso)
+        orbs = modifiedGramSchmidt(orbs, S)
+    else:
+        assert(mo_coeff.shape[0] == nso)
+        assert(mo_coeff.shape[1] == nso)
+        orbs = mo_coeff
+
+    #symmetry projector
+    Wg, Rg = calcSymmetryProjector(nao, m, 10)
+
+    Eold = 100
+    dt = 1.0
+    tol = 1.e-10
+    doPrint = True
+    for m in range(50):
+        #current wavefunction
+        Psi = orbs[:, 0:ne]
+
+        #energy terms
+        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+        N = np.real(N)
+        D = np.real(D)
+
+        #gradient terms
+        Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, V2, ne, orbs, Wg, Rg)
+
+        #electronic and total energy
+        E = N / D
+        E0 = E + mol.energy_nuc()
+
+        #gradient
+        G = (Npq / D) - E * (Dpq / D)
+        G = G - G.conj().T
+        Gvec = G.flatten()
+        Gnorm = lalg.norm(Gvec)
+
+        #scipy optimizer
+        params = np.zeros((2 * ne * (nso - ne), ), dtype = float)
+        sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'L-BFGS-B', jac = jac)
+        update = real_to_complex(sol.x)
+        paramMat = update.reshape((ne, (nso - ne)))
+        K = np.zeros(((nso, nso)), dtype = complex)
+        K[0:ne, ne:nso] = paramMat
+        K = K - K.conj().T
+
+        #orbital rotation
+        #U = lalg.expm(dt * G)
+        U = lalg.expm(- dt * K)
+        #U = np.real(U) #when performing only Sz projection, we want real orbitals
+
+        #update orbitals
+        orbs = orbs.dot(U)
+        orbs = np.real(orbs) #when performing only Sz projection, we want real orbitals
+
+        #update error
+        error = abs(E - Eold)
+        Eold = E
+
+        #print
+        if doPrint == True:
+            print(f"-------------------------------- {m} --------------------------------")
+            print("Projected values")
+
+            print(f"Denominator: {D}")
+            print(f"Numerator: {N}")
+            print(f"Electronic Energy: {E}")
+            print(f"Energy: {E0}")
+
+            print("Gradient")
+            print(np.real(G))
+            print(np.imag(G))
+
+            print(f"Norm: {Gnorm}")
+
+            print("\n scipy optimizer")
+            print(sol)
+            print("\n")
+
+            print("Orbital Rotation")
+            print(U)
+
+            print("Orbitals")
+            print(orbs)
+
+            print(f"Error: {error}")
+
+        #check for convergence
+        if (error < tol):
+            break
+
+    return E, orbs
+
+
+np.set_printoptions(precision=6)
+np.set_printoptions(suppress=True)
+
+mol = gto.Mole()
+#mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8; H 0 0 4.2'
+mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8;'
+#mol.atom = 'H 0 0 0; H 0 0 1.4'
+#mol.atom = 'H 0 0 0'
+#mol.atom = 'Li 0 0 0'
+#mol.basis = 'sto-3g'
+#mol.basis = '631g'
+#mol.basis = 'ccpvdz'
+mol.verbose = 4
+mol.spin = 1
+mol.unit = 'bohr'
+mol.build()
+
+mf = scf.GHF(mol)
+mf.kernel()
+S = mf.get_ovlp()
+occidx = mf.mo_occ > 0
+occOrb = mf.mo_coeff[:, occidx]
+print(occOrb)
+fock = mf.get_hcore() + mf.get_veff()
+print(fock)
+print("\n")
+
+E0, mo = pGHF(mol, mf.mo_coeff)
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='ubuntu', release='5.4.0-54-generic', version='#60-Ubuntu SMP Fri Nov 6 10:37:59 UTC 2020', machine='x86_64', processor='x86_64')  Threads 3
+Python 3.8.3 (default, May 19 2020, 18:47:26) 
+[GCC 7.3.0]
+numpy 1.19.4  scipy 1.4.1
+Date: Fri Dec  4 22:05:16 2020
+PySCF version 1.7.5
+PySCF path  /home/iliya/miniconda3/lib/python3.8/site-packages/pyscf
+
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 3
+[INPUT] num. electrons = 3
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 1
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = bohr
+[INPUT]  1 H      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 H      0.000000000000   0.000000000000   0.740848095288 AA    0.000000000000   0.000000000000   1.400000000000 Bohr
+[INPUT]  3 H      0.000000000000   0.000000000000   1.481696190576 AA    0.000000000000   0.000000000000   2.800000000000 Bohr
+
+nuclear repulsion = 1.78571428571429
+number of shells = 3
+number of NR pGTOs = 9
+number of NR cGTOs = 3
+basis = sto-3g
+ecp = {}
+CPU time:         0.33
+
+
+******** <class 'pyscf.scf.ghf.GHF'> ********
+method = GHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/tmpucgp211k
+max_memory 4000 MB (current use 73 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -1.30217620639081
+  HOMO = -0.00126233057865572  LUMO = 0.035957068540527
+cycle= 1 E= -1.50101060650032  delta_E= -0.199  |g|= 0.0965  |ddm|= 1.14
+  HOMO = -0.31610174548598  LUMO = 0.269307349635423
+cycle= 2 E= -1.50811343610013  delta_E= -0.0071  |g|= 0.0396  |ddm|= 0.12
+  HOMO = -0.32951147002  LUMO = 0.288119609185009
+cycle= 3 E= -1.50955627150087  delta_E= -0.00144  |g|= 0.00147  |ddm|= 0.0836
+  HOMO = -0.330466310265984  LUMO = 0.287849557986008
+cycle= 4 E= -1.50955787747012  delta_E= -1.61e-06  |g|= 1.4e-05  |ddm|= 0.00248
+  HOMO = -0.330482266001701  LUMO = 0.287845436957482
+cycle= 5 E= -1.50955787761745  delta_E= -1.47e-10  |g|= 5.59e-06  |ddm|= 1.76e-05
+  HOMO = -0.330491868541459  LUMO = 0.287841873010621
+Extra cycle  E= -1.5095578776409  delta_E= -2.34e-11  |g|= 2.23e-06  |ddm|= 6.95e-06
+converged SCF energy = -1.5095578776409  <S^2> = 0.76511153  2S+1 = 2.0150549
+[[ 0.276174  0.182257 -0.582652]
+ [ 0.299053  0.44801  -0.      ]
+ [ 0.276174  0.182257  0.582652]
+ [ 0.276174 -0.182257 -0.582652]
+ [ 0.299053 -0.44801  -0.      ]
+ [ 0.276174 -0.182257  0.582652]]
+[[-0.348843 -0.586622 -0.333139 -0.195207 -0.043874  0.032468]
+ [-0.586622 -0.547089 -0.586622 -0.043874 -0.001392 -0.043874]
+ [-0.333139 -0.586622 -0.348843  0.032468 -0.043874 -0.195207]
+ [-0.195207 -0.043874  0.032468 -0.348843 -0.586622 -0.333139]
+ [-0.043874 -0.001392 -0.043874 -0.586622 -0.547089 -0.586622]
+ [ 0.032468 -0.043874 -0.195207 -0.333139 -0.586622 -0.348843]]
+
+
+-------------------------------- 0 --------------------------------
+Projected values
+Denominator: 0.49811105878258727
+Numerator: -1.6434898604467147
+Electronic Energy: -3.29944463482401
+Energy: -1.5137303491097243
+Gradient
+[[ 0.        0.        0.       -0.003353  0.011504  0.061312]
+ [ 0.        0.        0.        0.027125  0.051335  0.02081 ]
+ [ 0.        0.        0.        0.006246  0.143873  0.132874]
+ [ 0.003353 -0.027125 -0.006246  0.        0.        0.      ]
+ [-0.011504 -0.051335 -0.143873  0.        0.        0.      ]
+ [-0.061312 -0.02081  -0.132874  0.        0.        0.      ]]
+[[ 0.        0.        0.       -0.011679 -0.       -0.      ]
+ [ 0.        0.        0.        0.014772  0.       -0.      ]
+ [ 0.        0.        0.       -0.       -0.030386  0.035379]
+ [-0.011679  0.014772 -0.        0.        0.        0.      ]
+ [-0.        0.       -0.030386  0.        0.        0.      ]
+ [-0.       -0.        0.035379  0.        0.        0.      ]]
+Norm: 0.31186676826849347
+
+ scipy optimizer
+      fun: -3.3061096367261236
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([ 0.000082, -0.015204, -0.014331,  0.050572,  0.027015, -0.507824,
+       -0.003953,  0.06865 , -0.01804 , -0.00446 ,  0.002642, -0.000954,
+        0.003317,  0.001223,  0.004655,  0.002595, -0.000655,  0.001408])
+  message: b'ABNORMAL_TERMINATION_IN_LNSRCH'
+     nfev: 58
+      nit: 6
+   status: 2
+  success: False
+        x: array([ 0.001461, -0.026156, -0.065722, -0.011833, -0.037058,  0.047664,
+        0.025869, -0.014746, -0.007122,  0.004391, -0.000007,  0.000009,
+       -0.005229, -0.000001, -0.002601,  0.000022,  0.010324, -0.011233])
+
+
+Orbital Rotation
+[[ 0.997489+0.j        0.001101+0.000107j -0.000445+0.000177j
+  -0.001452-0.004387j  0.026146+0.000011j  0.065648-0.000011j]
+ [ 0.001101-0.000107j  0.998091+0.j        0.000035-0.000401j
+   0.011824+0.005227j  0.037042-0.000002j -0.047608+0.002596j]
+ [-0.000445-0.000177j  0.000035+0.000401j  0.999415-0.j
+  -0.025865-0.000019j  0.01474 -0.010319j  0.00711 +0.01122j ]
+ [ 0.001452-0.004387j -0.011824+0.005227j  0.025865-0.000019j
+   0.999571+0.j       -0.00001 -0.000094j  0.000415-0.000139j]
+ [-0.026146+0.000011j -0.037042-0.000002j -0.01474 -0.010319j
+  -0.00001 +0.000094j  0.99881 +0.j        0.000029-0.000167j]
+ [-0.065648-0.000011j  0.047608+0.002596j -0.00711 +0.01122j
+   0.000415+0.000139j  0.000029+0.000167j  0.996614+0.j      ]]
+Orbitals
+[[ 0.345519  0.179843 -0.580976 -0.565892 -0.740703 -0.767571]
+ [ 0.188897  0.458287 -0.026669  0.005343  1.253167  1.178421]
+ [ 0.346691  0.166105  0.613786  0.568771 -0.723538 -0.758803]
+ [ 0.245022 -0.123938 -0.561872  0.595245 -0.754171  0.795504]
+ [ 0.343378 -0.548767 -0.009863 -0.006235  1.219908 -1.139085]
+ [ 0.242812 -0.110118  0.57261  -0.599699 -0.736984  0.803305]]
+Error: 103.29944463482401
+-------------------------------- 1 --------------------------------
+Projected values
+Denominator: 0.5215740059208719
+Numerator: -1.7244137195451743
+Electronic Energy: -3.3061726619228518
+Energy: -1.520458376208566
+Gradient
+[[ 0.        0.        0.        0.004353  0.014739 -0.021104]
+ [ 0.        0.        0.       -0.005544  0.008939  0.018667]
+ [ 0.        0.        0.       -0.006411 -0.020322 -0.018395]
+ [-0.004353  0.005544  0.006411  0.        0.        0.      ]
+ [-0.014739 -0.008939  0.020322  0.        0.        0.      ]
+ [ 0.021104 -0.018667  0.018395  0.        0.        0.      ]]
+[[ 0.  0.  0.  0. -0. -0.]
+ [ 0.  0.  0. -0. -0. -0.]
+ [ 0.  0.  0. -0.  0. -0.]
+ [ 0. -0. -0.  0.  0.  0.]
+ [-0. -0.  0.  0.  0.  0.]
+ [-0. -0. -0.  0.  0.  0.]]
+Norm: 0.06217939096066978
+
+ scipy optimizer
+      fun: -3.3123573611306116
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([ 0.000011, -0.000029, -0.000009, -0.000027, -0.000012, -0.000045,
+       -0.000002,  0.000029,  0.000041,  0.000001, -0.      , -0.      ,
+       -0.000001, -0.      , -0.      , -0.      ,  0.000003,  0.000003])
+  message: b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+     nfev: 20
+      nit: 16
+   status: 0
+  success: True
+        x: array([-0.002065, -0.181722,  0.178094,  0.011227, -0.165648,  0.161781,
+        0.076544,  0.014219,  0.007627, -0.      ,  0.      ,  0.      ,
+        0.      ,  0.      ,  0.      ,  0.      , -0.000002, -0.000002])
+
+
+Orbital Rotation
+[[ 0.967946+0.j       -0.029156+0.j        0.000687+0.j
+   0.002135+0.j        0.178153-0.j       -0.174607-0.j      ]
+ [-0.029156-0.j        0.973395+0.j        0.000127-0.j
+  -0.011151-0.j        0.1624  -0.j       -0.158603-0.j      ]
+ [ 0.000687-0.j        0.000127+0.j        0.996942+0.j
+  -0.076466-0.j       -0.014156+0.000002j -0.007667+0.000002j]
+ [-0.002135+0.j        0.011151-0.j        0.076466-0.j
+   0.997007+0.j        0.000192+0.j       -0.00101 +0.j      ]
+ [-0.178153-0.j       -0.1624  -0.j        0.014156+0.000002j
+   0.000192-0.j        0.969965-0.j        0.029236+0.j      ]
+ [ 0.174607-0.j        0.158603-0.j        0.007667+0.000002j
+  -0.00101 -0.j        0.029236-0.j        0.97131 +0.j      ]]
+Orbitals
+[[ 0.327944  0.157151 -0.638581 -0.520408 -0.64202  -0.851033]
+ [ 0.151956  0.42403   0.000784  0.00171   1.358438  1.07578 ]
+ [ 0.326351  0.155152  0.6396    0.51965  -0.643831 -0.850346]
+ [ 0.512383  0.127429 -0.519062  0.637385 -0.67667   0.731212]
+ [-0.067846 -0.923024 -0.001608  0.002775  1.122158 -1.043577]
+ [ 0.511472  0.126211  0.520881 -0.640896 -0.674209  0.729995]]
+Error: 0.006728027098841682
+-------------------------------- 2 --------------------------------
+Projected values
+Denominator: 0.49732223631272976
+Numerator: -1.647308970310106
+Electronic Energy: -3.312357361142069
+Energy: -1.5266430754277833
+Gradient
+[[ 0.        0.        0.        0.000011 -0.000029 -0.000009]
+ [ 0.        0.        0.       -0.000027 -0.000012 -0.000045]
+ [ 0.        0.        0.       -0.000002  0.000029  0.000041]
+ [-0.000011  0.000027  0.000002  0.        0.        0.      ]
+ [ 0.000029  0.000012 -0.000029  0.        0.        0.      ]
+ [ 0.000009  0.000045 -0.000041  0.        0.        0.      ]]
+[[ 0.  0.  0. -0. -0. -0.]
+ [ 0.  0.  0.  0. -0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [-0.  0.  0.  0.  0.  0.]
+ [-0. -0.  0.  0.  0.  0.]
+ [-0.  0.  0.  0.  0.  0.]]
+Norm: 0.00011334083234295473
+
+ scipy optimizer
+      fun: -3.3123573632392453
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([ 0.000006, -0.000018, -0.000007, -0.000022, -0.000009, -0.000031,
+       -0.000003,  0.000017,  0.000029,  0.      , -0.      , -0.      ,
+        0.      , -0.      ,  0.      ,  0.      ,  0.      , -0.      ])
+  message: b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+     nfev: 3
+      nit: 1
+   status: 0
+  success: True
+        x: array([-0.000002,  0.000006,  0.000002,  0.000005,  0.000002,  0.000009,
+        0.      , -0.000006, -0.000008,  0.      ,  0.      ,  0.      ,
+       -0.      ,  0.      , -0.      , -0.      , -0.      , -0.      ])
+
+
+Orbital Rotation
+[[ 1.      +0.j -0.      -0.j  0.      -0.j  0.000002-0.j -0.000006-0.j
+  -0.000002-0.j]
+ [-0.      +0.j  1.      -0.j  0.      -0.j -0.000005+0.j -0.000002-0.j
+  -0.000009+0.j]
+ [ 0.      +0.j  0.      +0.j  1.      -0.j -0.      +0.j  0.000006+0.j
+   0.000008+0.j]
+ [-0.000002-0.j  0.000005+0.j  0.      +0.j  1.      +0.j  0.      +0.j
+  -0.      -0.j]
+ [ 0.000006-0.j  0.000002-0.j -0.000006+0.j  0.      -0.j  1.      +0.j
+  -0.      -0.j]
+ [ 0.000002-0.j  0.000009+0.j -0.000008+0.j -0.      +0.j -0.      +0.j
+   1.      +0.j]]
+Orbitals
+[[ 0.32794   0.15714  -0.638571 -0.520408 -0.642025 -0.85104 ]
+ [ 0.151965  0.424043  0.000768  0.001708  1.358437  1.075776]
+ [ 0.326344  0.155145  0.639611  0.51965  -0.643829 -0.850343]
+ [ 0.51238   0.127437 -0.519063  0.637385 -0.676676  0.731206]
+ [-0.067841 -0.92303  -0.001606  0.002779  1.122161 -1.043569]
+ [ 0.51147   0.126212  0.520879 -0.640896 -0.67421   0.729997]]
+Error: 0.006184699219217382
+-------------------------------- 3 --------------------------------
+Projected values
+Denominator: 0.4973220651894755
+Numerator: -1.6473084045317081
+Electronic Energy: -3.312357363239247
+Energy: -1.5266430775249613
+Gradient
+[[ 0.        0.        0.        0.000006 -0.000018 -0.000007]
+ [ 0.        0.        0.       -0.000022 -0.000009 -0.000031]
+ [ 0.        0.        0.       -0.000003  0.000017  0.000029]
+ [-0.000006  0.000022  0.000003  0.        0.        0.      ]
+ [ 0.000018  0.000009 -0.000017  0.        0.        0.      ]
+ [ 0.000007  0.000031 -0.000029  0.        0.        0.      ]]
+[[ 0.  0.  0. -0. -0. -0.]
+ [ 0.  0.  0. -0.  0. -0.]
+ [ 0.  0.  0.  0.  0. -0.]
+ [-0. -0.  0.  0.  0.  0.]
+ [-0.  0.  0.  0.  0.  0.]
+ [-0. -0. -0.  0.  0.  0.]]
+Norm: 7.814849520855741e-05
+
+ scipy optimizer
+      fun: -3.3123573642544595
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([ 0.000003, -0.00001 , -0.000005, -0.000019, -0.000006, -0.000021,
+       -0.000003,  0.00001 ,  0.000021,  0.      ,  0.      , -0.      ,
+        0.      ,  0.      , -0.      ,  0.      , -0.      , -0.      ])
+  message: b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+     nfev: 3
+      nit: 1
+   status: 0
+  success: True
+        x: array([-0.000001,  0.000003,  0.000001,  0.000004,  0.000002,  0.000006,
+        0.000001, -0.000003, -0.000006,  0.      ,  0.      ,  0.      ,
+        0.      , -0.      ,  0.      , -0.      , -0.      ,  0.      ])
+
+
+Orbital Rotation
+[[ 1.      -0.j -0.      -0.j  0.      +0.j  0.000001-0.j -0.000003-0.j
+  -0.000001-0.j]
+ [-0.      +0.j  1.      +0.j  0.      +0.j -0.000004-0.j -0.000002+0.j
+  -0.000006-0.j]
+ [ 0.      -0.j  0.      -0.j  1.      -0.j -0.000001+0.j  0.000003+0.j
+   0.000006-0.j]
+ [-0.000001-0.j  0.000004-0.j  0.000001+0.j  1.      +0.j -0.      +0.j
+  -0.      +0.j]
+ [ 0.000003-0.j  0.000002+0.j -0.000003+0.j -0.      -0.j  1.      -0.j
+  -0.      +0.j]
+ [ 0.000001-0.j  0.000006-0.j -0.000006-0.j -0.      -0.j -0.      -0.j
+   1.      +0.j]]
+Orbitals
+[[ 0.327937  0.157131 -0.638564 -0.520408 -0.642029 -0.851045]
+ [ 0.151971  0.424052  0.000757  0.001707  1.358435  1.075773]
+ [ 0.32634   0.155141  0.639618  0.519649 -0.643829 -0.85034 ]
+ [ 0.512377  0.127443 -0.519065  0.637386 -0.67668   0.731202]
+ [-0.067839 -0.923035 -0.001604  0.002783  1.122163 -1.043563]
+ [ 0.51147   0.126213  0.520876 -0.640896 -0.67421   0.729999]]
+Error: 2.097177986826182e-09
+-------------------------------- 4 --------------------------------
+Projected values
+Denominator: 0.4973219580983032
+Numerator: -1.647308050312362
+Electronic Energy: -3.312357364254459
+Energy: -1.5266430785401732
+Gradient
+[[ 0.        0.        0.        0.000003 -0.00001  -0.000005]
+ [ 0.        0.        0.       -0.000019 -0.000006 -0.000021]
+ [ 0.        0.        0.       -0.000003  0.00001   0.000021]
+ [-0.000003  0.000019  0.000003  0.        0.        0.      ]
+ [ 0.00001   0.000006 -0.00001   0.        0.        0.      ]
+ [ 0.000005  0.000021 -0.000021  0.        0.        0.      ]]
+[[ 0.  0.  0. -0.  0. -0.]
+ [ 0.  0.  0.  0. -0. -0.]
+ [ 0.  0.  0. -0. -0. -0.]
+ [-0.  0. -0.  0.  0.  0.]
+ [ 0. -0. -0.  0.  0.  0.]
+ [-0. -0. -0.  0.  0.  0.]]
+Norm: 5.515581669340763e-05
+
+ scipy optimizer
+      fun: -3.3123573647764517
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([ 0.      , -0.000005, -0.000004, -0.000016, -0.000004, -0.000015,
+       -0.000003,  0.000004,  0.000016, -0.      ,  0.      , -0.      ,
+       -0.      ,  0.      , -0.      ,  0.      , -0.      ,  0.      ])
+  message: b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+     nfev: 3
+      nit: 1
+   status: 0
+  success: True
+        x: array([-0.000001,  0.000002,  0.000001,  0.000004,  0.000001,  0.000004,
+        0.000001, -0.000002, -0.000004,  0.      , -0.      ,  0.      ,
+       -0.      ,  0.      ,  0.      ,  0.      ,  0.      ,  0.      ])
+
+
+Orbital Rotation
+[[ 1.      +0.j -0.      -0.j  0.      +0.j  0.000001-0.j -0.000002+0.j
+  -0.000001-0.j]
+ [-0.      +0.j  1.      -0.j  0.      +0.j -0.000004+0.j -0.000001-0.j
+  -0.000004-0.j]
+ [ 0.      -0.j  0.      -0.j  1.      -0.j -0.000001-0.j  0.000002-0.j
+   0.000004-0.j]
+ [-0.000001-0.j  0.000004+0.j  0.000001-0.j  1.      +0.j -0.      +0.j
+  -0.      -0.j]
+ [ 0.000002+0.j  0.000001-0.j -0.000002-0.j -0.      -0.j  1.      -0.j
+  -0.      +0.j]
+ [ 0.000001-0.j  0.000004-0.j -0.000004-0.j -0.      +0.j -0.      -0.j
+   1.      +0.j]]
+Orbitals
+[[ 0.327935  0.157125 -0.638559 -0.520408 -0.642031 -0.851049]
+ [ 0.151975  0.424058  0.00075   0.001705  1.358434  1.075771]
+ [ 0.326338  0.155139  0.639623  0.519648 -0.643828 -0.850339]
+ [ 0.512376  0.127447 -0.519066  0.637386 -0.676682  0.731199]
+ [-0.067838 -0.923038 -0.001602  0.002787  1.122164 -1.043559]
+ [ 0.51147   0.126212  0.520874 -0.640896 -0.67421   0.73    ]]
+Error: 1.015211914534575e-09
+-------------------------------- 5 --------------------------------
+Projected values
+Denominator: 0.4973219042461164
+Numerator: -1.6473078721942729
+Electronic Energy: -3.3123573647764517
+Energy: -1.526643079062166
+Gradient
+[[ 0.        0.        0.        0.       -0.000005 -0.000004]
+ [ 0.        0.        0.       -0.000016 -0.000004 -0.000015]
+ [ 0.        0.        0.       -0.000003  0.000004  0.000016]
+ [-0.        0.000016  0.000003  0.        0.        0.      ]
+ [ 0.000005  0.000004 -0.000004  0.        0.        0.      ]
+ [ 0.000004  0.000015 -0.000016  0.        0.        0.      ]]
+[[ 0.  0.  0.  0. -0. -0.]
+ [ 0.  0.  0.  0. -0.  0.]
+ [ 0.  0.  0.  0. -0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [-0. -0. -0.  0.  0.  0.]
+ [-0.  0.  0.  0.  0.  0.]]
+Norm: 4.044483432608952e-05
+
+ scipy optimizer
+      fun: -3.312357365073591
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([-0.000002, -0.000002, -0.000004, -0.000014, -0.000002, -0.000011,
+       -0.000003,  0.000001,  0.000012,  0.      , -0.      ,  0.      ,
+       -0.      , -0.      ,  0.      ,  0.      ,  0.      , -0.      ])
+  message: b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+     nfev: 3
+      nit: 1
+   status: 0
+  success: True
+        x: array([-0.      ,  0.000001,  0.000001,  0.000003,  0.000001,  0.000003,
+        0.000001, -0.000001, -0.000003, -0.      ,  0.      ,  0.      ,
+       -0.      ,  0.      , -0.      , -0.      ,  0.      , -0.      ])
+
+
+Orbital Rotation
+[[ 1.      -0.j -0.      +0.j  0.      -0.j  0.      +0.j -0.000001-0.j
+  -0.000001-0.j]
+ [-0.      -0.j  1.      -0.j  0.      -0.j -0.000003+0.j -0.000001-0.j
+  -0.000003+0.j]
+ [ 0.      +0.j  0.      +0.j  1.      -0.j -0.000001+0.j  0.000001-0.j
+   0.000003+0.j]
+ [-0.      +0.j  0.000003+0.j  0.000001+0.j  1.      +0.j -0.      -0.j
+  -0.      -0.j]
+ [ 0.000001-0.j  0.000001-0.j -0.000001-0.j -0.      +0.j  1.      -0.j
+  -0.      -0.j]
+ [ 0.000001-0.j  0.000003+0.j -0.000003+0.j -0.      +0.j -0.      +0.j
+   1.      -0.j]]
+Orbitals
+[[ 0.327934  0.15712  -0.638556 -0.520408 -0.642032 -0.851052]
+ [ 0.151978  0.424062  0.000745  0.001704  1.358434  1.07577 ]
+ [ 0.326336  0.155138  0.639627  0.519647 -0.643828 -0.850337]
+ [ 0.512376  0.127451 -0.519068  0.637386 -0.676683  0.731196]
+ [-0.067837 -0.92304  -0.001599  0.00279   1.122165 -1.043556]
+ [ 0.51147   0.126212  0.520872 -0.640897 -0.67421   0.730001]]
+Error: 5.219926713095902e-10
+-------------------------------- 6 --------------------------------
+Projected values
+Denominator: 0.497321894983706
+Numerator: -1.6473078416616334
+Electronic Energy: -3.3123573650735905
+Energy: -1.5266430793593047
+Gradient
+[[ 0.        0.        0.       -0.000002 -0.000002 -0.000004]
+ [ 0.        0.        0.       -0.000014 -0.000002 -0.000011]
+ [ 0.        0.        0.       -0.000003  0.000001  0.000012]
+ [ 0.000002  0.000014  0.000003  0.        0.        0.      ]
+ [ 0.000002  0.000002 -0.000001  0.        0.        0.      ]
+ [ 0.000004  0.000011 -0.000012  0.        0.        0.      ]]
+[[ 0.  0.  0. -0. -0. -0.]
+ [ 0.  0.  0. -0.  0. -0.]
+ [ 0.  0.  0.  0. -0.  0.]
+ [-0. -0.  0.  0.  0.  0.]
+ [-0.  0. -0.  0.  0.  0.]
+ [-0. -0.  0.  0.  0.  0.]]
+Norm: 3.130989024236044e-05
+
+ scipy optimizer
+      fun: -3.312357365271146
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([-0.000003, -0.      , -0.000003, -0.000012, -0.000001, -0.000008,
+       -0.000003, -0.000002,  0.00001 ,  0.      ,  0.      ,  0.      ,
+       -0.      ,  0.      , -0.      ,  0.      ,  0.      ,  0.      ])
+  message: b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+     nfev: 3
+      nit: 1
+   status: 0
+  success: True
+        x: array([ 0.      ,  0.      ,  0.000001,  0.000003,  0.      ,  0.000002,
+        0.000001, -0.      , -0.000003,  0.      ,  0.      ,  0.      ,
+        0.      , -0.      ,  0.      , -0.      ,  0.      , -0.      ])
+
+
+Orbital Rotation
+[[ 1.      +0.j -0.      -0.j  0.      -0.j -0.      -0.j -0.      -0.j
+  -0.000001-0.j]
+ [-0.      +0.j  1.      -0.j  0.      -0.j -0.000003-0.j -0.      +0.j
+  -0.000002-0.j]
+ [ 0.      +0.j  0.      +0.j  1.      -0.j -0.000001+0.j  0.      -0.j
+   0.000003+0.j]
+ [ 0.      -0.j  0.000003-0.j  0.000001+0.j  1.      +0.j -0.      +0.j
+  -0.      +0.j]
+ [ 0.      -0.j  0.      +0.j -0.      -0.j -0.      -0.j  1.      -0.j
+  -0.      -0.j]
+ [ 0.000001-0.j  0.000002-0.j -0.000003+0.j -0.      -0.j -0.      +0.j
+   1.      -0.j]]
+Orbitals
+[[ 0.327933  0.157116 -0.638554 -0.520408 -0.642032 -0.851054]
+ [ 0.151979  0.424066  0.000742  0.001702  1.358434  1.075769]
+ [ 0.326336  0.155137  0.63963   0.519646 -0.643828 -0.850336]
+ [ 0.512377  0.127455 -0.519069  0.637386 -0.676684  0.731194]
+ [-0.067838 -0.923042 -0.001596  0.002793  1.122165 -1.043554]
+ [ 0.51147   0.126211  0.52087  -0.640898 -0.67421   0.730002]]
+Error: 2.9713875804304735e-10
+-------------------------------- 7 --------------------------------
+Projected values
+Denominator: 0.49732192589149654
+Numerator: -1.6473079441375291
+Electronic Energy: -3.312357365271145
+Energy: -1.526643079556859
+Gradient
+[[ 0.        0.        0.       -0.000003 -0.       -0.000003]
+ [ 0.        0.        0.       -0.000012 -0.000001 -0.000008]
+ [ 0.        0.        0.       -0.000003 -0.000002  0.00001 ]
+ [ 0.000003  0.000012  0.000003  0.        0.        0.      ]
+ [ 0.        0.000001  0.000002  0.        0.        0.      ]
+ [ 0.000003  0.000008 -0.00001   0.        0.        0.      ]]
+[[ 0.  0.  0. -0. -0.  0.]
+ [ 0.  0.  0. -0.  0.  0.]
+ [ 0.  0.  0.  0. -0.  0.]
+ [-0. -0.  0.  0.  0.  0.]
+ [-0.  0. -0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]]
+Norm: 2.5814089618668362e-05
+
+ scipy optimizer
+      fun: -3.3123573654351737
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([-0.000004,  0.000001, -0.000003, -0.000011,  0.      , -0.000005,
+       -0.000003, -0.000004,  0.000008,  0.      , -0.      ,  0.      ,
+        0.      , -0.      , -0.      , -0.      , -0.      , -0.      ])
+  message: b'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
+     nfev: 3
+      nit: 1
+   status: 0
+  success: True
+        x: array([ 0.000001,  0.      ,  0.000001,  0.000003,  0.      ,  0.000002,
+        0.000001,  0.      , -0.000003,  0.      ,  0.      , -0.      ,
+        0.      , -0.      , -0.      , -0.      ,  0.      , -0.      ])
+
+
+Orbital Rotation
+[[ 1.      +0.j -0.      +0.j  0.      -0.j -0.000001-0.j -0.      -0.j
+  -0.000001+0.j]
+ [-0.      -0.j  1.      +0.j  0.      -0.j -0.000003-0.j -0.      +0.j
+  -0.000002+0.j]
+ [ 0.      +0.j  0.      +0.j  1.      +0.j -0.000001+0.j -0.      -0.j
+   0.000003+0.j]
+ [ 0.000001-0.j  0.000003-0.j  0.000001+0.j  1.      -0.j -0.      +0.j
+  -0.      +0.j]
+ [ 0.      -0.j  0.      +0.j  0.      -0.j -0.      -0.j  1.      +0.j
+   0.      -0.j]
+ [ 0.000001+0.j  0.000002+0.j -0.000003+0.j -0.      -0.j  0.      +0.j
+   1.      +0.j]]
+Orbitals
+[[ 0.327931  0.157113 -0.638553 -0.520408 -0.642032 -0.851056]
+ [ 0.15198   0.424068  0.00074   0.001701  1.358434  1.075768]
+ [ 0.326335  0.155137  0.639632  0.519645 -0.643829 -0.850335]
+ [ 0.512378  0.127458 -0.519071  0.637385 -0.676684  0.731192]
+ [-0.067839 -0.923044 -0.001593  0.002796  1.122165 -1.043552]
+ [ 0.51147   0.126211  0.520867 -0.640899 -0.674211  0.730002]]
+Error: 1.975544172694299e-10
+-------------------------------- 8 --------------------------------
+Projected values
+Denominator: 0.4973220029934173
+Numerator: -1.6473081996082195
+Electronic Energy: -3.312357365435174
+Energy: -1.5266430797208883
+Gradient
+[[ 0.        0.        0.       -0.000004  0.000001 -0.000003]
+ [ 0.        0.        0.       -0.000011  0.       -0.000005]
+ [ 0.        0.        0.       -0.000003 -0.000004  0.000008]
+ [ 0.000004  0.000011  0.000003  0.        0.        0.      ]
+ [-0.000001 -0.        0.000004  0.        0.        0.      ]
+ [ 0.000003  0.000005 -0.000008  0.        0.        0.      ]]
+[[ 0.  0.  0.  0. -0. -0.]
+ [ 0.  0.  0.  0. -0.  0.]
+ [ 0.  0.  0.  0. -0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [-0. -0. -0.  0.  0.  0.]
+ [-0.  0.  0.  0.  0.  0.]]
+Norm: 2.254731561390389e-05
+
+ scipy optimizer
+      fun: -3.3123573656286553
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([-0.000006,  0.000002, -0.000002, -0.000009,  0.000001, -0.000003,
+       -0.000003, -0.000005,  0.000006, -0.      , -0.      ,  0.      ,
+       -0.      ,  0.      ,  0.      , -0.      ,  0.      , -0.      ])
+  message: b'CONVERGENCE: NORM_OF_PROJECTED_GRADIENT_<=_PGTOL'
+     nfev: 3
+      nit: 1
+   status: 0
+  success: True
+        x: array([ 0.000002, -0.      ,  0.000001,  0.000004, -0.      ,  0.000002,
+        0.000001,  0.000001, -0.000003, -0.      ,  0.      ,  0.      ,
+       -0.      ,  0.      , -0.      , -0.      ,  0.      , -0.      ])
+
+
+Orbital Rotation
+[[ 1.      -0.j -0.      -0.j  0.      -0.j -0.000002+0.j  0.      -0.j
+  -0.000001-0.j]
+ [-0.      +0.j  1.      -0.j  0.      -0.j -0.000004+0.j  0.      -0.j
+  -0.000002+0.j]
+ [ 0.      +0.j  0.      +0.j  1.      -0.j -0.000001+0.j -0.000001-0.j
+   0.000003+0.j]
+ [ 0.000002+0.j  0.000004+0.j  0.000001+0.j  1.      -0.j -0.      -0.j
+  -0.      -0.j]
+ [-0.      -0.j -0.      -0.j  0.000001-0.j -0.      +0.j  1.      -0.j
+   0.      -0.j]
+ [ 0.000001-0.j  0.000002+0.j -0.000003+0.j -0.      +0.j  0.      +0.j
+   1.      +0.j]]
+Orbitals
+[[ 0.32793   0.157109 -0.638552 -0.520409 -0.642031 -0.851059]
+ [ 0.151981  0.42407   0.000738  0.001699  1.358434  1.075767]
+ [ 0.326336  0.155137  0.639634  0.519643 -0.643829 -0.850334]
+ [ 0.51238   0.127462 -0.519073  0.637384 -0.676683  0.73119 ]
+ [-0.06784  -0.923046 -0.001588  0.0028    1.122165 -1.04355 ]
+ [ 0.51147   0.126209  0.520863 -0.640901 -0.674211  0.730003]]
+Error: 1.6402923463942898e-10
+-------------------------------- 9 --------------------------------
+Projected values
+Denominator: 0.4973221738822183
+Numerator: -1.6473087657492214
+Electronic Energy: -3.3123573656286567
+Energy: -1.5266430799143709
+Gradient
+[[ 0.        0.        0.       -0.000006  0.000002 -0.000002]
+ [ 0.        0.        0.       -0.000009  0.000001 -0.000003]
+ [ 0.        0.        0.       -0.000003 -0.000005  0.000006]
+ [ 0.000006  0.000009  0.000003  0.        0.        0.      ]
+ [-0.000002 -0.000001  0.000005  0.        0.        0.      ]
+ [ 0.000002  0.000003 -0.000006  0.        0.        0.      ]]
+[[ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0. -0.]
+ [ 0.  0.  0. -0.  0.  0.]
+ [ 0.  0. -0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0. -0.  0.  0.  0.  0.]]
+Norm: 2.050918974491808e-05
+
+ scipy optimizer
+      fun: -3.3123573656286567
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([-0.000006,  0.000002, -0.000002, -0.000009,  0.000001, -0.000003,
+       -0.000003, -0.000005,  0.000006,  0.      ,  0.      ,  0.      ,
+        0.      ,  0.      , -0.      , -0.      ,  0.      ,  0.      ])
+  message: b'CONVERGENCE: NORM_OF_PROJECTED_GRADIENT_<=_PGTOL'
+     nfev: 1
+      nit: 0
+   status: 0
+  success: True
+        x: array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+       0.])
+
+
+Orbital Rotation
+[[1.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+ [0.+0.j 1.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+ [0.+0.j 0.+0.j 1.+0.j 0.+0.j 0.+0.j 0.+0.j]
+ [0.+0.j 0.+0.j 0.+0.j 1.+0.j 0.+0.j 0.+0.j]
+ [0.+0.j 0.+0.j 0.+0.j 0.+0.j 1.+0.j 0.+0.j]
+ [0.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j 1.+0.j]]
+Orbitals
+[[ 0.32793   0.157109 -0.638552 -0.520409 -0.642031 -0.851059]
+ [ 0.151981  0.42407   0.000738  0.001699  1.358434  1.075767]
+ [ 0.326336  0.155137  0.639634  0.519643 -0.643829 -0.850334]
+ [ 0.51238   0.127462 -0.519073  0.637384 -0.676683  0.73119 ]
+ [-0.06784  -0.923046 -0.001588  0.0028    1.122165 -1.04355 ]
+ [ 0.51147   0.126209  0.520863 -0.640901 -0.674211  0.730003]]
+Error: 1.9348256330431468e-10
+-------------------------------- 10 --------------------------------
+Projected values
+Denominator: 0.4973221738822183
+Numerator: -1.6473087657492214
+Electronic Energy: -3.3123573656286567
+Energy: -1.5266430799143709
+Gradient
+[[ 0.        0.        0.       -0.000006  0.000002 -0.000002]
+ [ 0.        0.        0.       -0.000009  0.000001 -0.000003]
+ [ 0.        0.        0.       -0.000003 -0.000005  0.000006]
+ [ 0.000006  0.000009  0.000003  0.        0.        0.      ]
+ [-0.000002 -0.000001  0.000005  0.        0.        0.      ]
+ [ 0.000002  0.000003 -0.000006  0.        0.        0.      ]]
+[[ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0. -0.]
+ [ 0.  0.  0. -0.  0.  0.]
+ [ 0.  0. -0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0. -0.  0.  0.  0.  0.]]
+Norm: 2.050918974491808e-05
+
+ scipy optimizer
+      fun: -3.3123573656286567
+ hess_inv: <18x18 LbfgsInvHessProduct with dtype=float64>
+      jac: array([-0.000006,  0.000002, -0.000002, -0.000009,  0.000001, -0.000003,
+       -0.000003, -0.000005,  0.000006,  0.      ,  0.      ,  0.      ,
+        0.      ,  0.      , -0.      , -0.      ,  0.      ,  0.      ])
+  message: b'CONVERGENCE: NORM_OF_PROJECTED_GRADIENT_<=_PGTOL'
+     nfev: 1
+      nit: 0
+   status: 0
+  success: True
+        x: array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+       0.])
+
+
+Orbital Rotation
+[[1.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+ [0.+0.j 1.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+ [0.+0.j 0.+0.j 1.+0.j 0.+0.j 0.+0.j 0.+0.j]
+ [0.+0.j 0.+0.j 0.+0.j 1.+0.j 0.+0.j 0.+0.j]
+ [0.+0.j 0.+0.j 0.+0.j 0.+0.j 1.+0.j 0.+0.j]
+ [0.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j 1.+0.j]]
+Orbitals
+[[ 0.32793   0.157109 -0.638552 -0.520409 -0.642031 -0.851059]
+ [ 0.151981  0.42407   0.000738  0.001699  1.358434  1.075767]
+ [ 0.326336  0.155137  0.639634  0.519643 -0.643829 -0.850334]
+ [ 0.51238   0.127462 -0.519073  0.637384 -0.676683  0.73119 ]
+ [-0.06784  -0.923046 -0.001588  0.0028    1.122165 -1.04355 ]
+ [ 0.51147   0.126209  0.520863 -0.640901 -0.674211  0.730003]]
+Error: 0.0
