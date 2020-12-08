@@ -83,3 +83,38 @@ def modifiedGramSchmidt(V, S = None):
 
     return U
 
+    #V2 = np.zeros((nso, ) * 4) #note the two-electron integrals are anti-symmetrized
+    #for i in range(nao):
+    #    for j in range(nao):
+    #        for k in range(nao):
+    #            for l in range(nao):
+    #                #spin-orbital indices
+    #                ia = i
+    #                ja = j
+    #                ka = k
+    #                la = l
+
+    #                ib = i + nao
+    #                jb = j + nao
+    #                kb = k + nao
+    #                lb = l + nao
+
+    #                #all non-zero spin-orbital index tuples
+    #                aaaa = (ia, ja, ka, la)
+    #                bbbb = (ib, jb, kb, lb)
+
+    #                aabb = (ia, ja, kb, lb)
+    #                bbaa = (ib, jb, ka, la)
+
+    #                abba = (ia, jb, kb, la)
+    #                baab = (ib, ja, ka, lb)
+
+    #                #non-zero integrals
+    #                V2[aaaa] = v2[(i, j, k, l)] - v2[(i, l, k, j)]
+    #                V2[bbbb] = v2[(i, j, k, l)] - v2[(i, l, k, j)]
+
+    #                V2[aabb] = v2[(i, j, k, l)]
+    #                V2[bbaa] = v2[(i, j, k, l)]
+
+    #                V2[abba] = - v2[(i, l, k, j)]
+    #                V2[baab] = - v2[(i, l, k, j)]

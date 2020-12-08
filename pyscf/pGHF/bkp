@@ -2,6 +2,7 @@ from pyscf import gto, scf, tools
 import numpy as np
 import scipy.linalg as lalg
 import scipy.optimize as opt
+import time
 import sys
 
 def calcOverlap(S, Bra, Ket):
@@ -14,12 +15,12 @@ def calcDensityMatrix(S, Bra, Ket):
     return Ket.dot(ovlpInv).dot(Bra.conj().T)
 
 def calcHamiltonianMatrixElement(H1, V2, dm1):
-    Hij = np.einsum('pq,qp->', H1, dm1, casting = 'safe')
-    Hij += 0.5 * np.einsum('pqrs,qp,sr->', V2, dm1, dm1, casting = 'safe')
-    Hij -= 0.5 * np.einsum('psrq,qp,sr->', V2, dm1, dm1, casting = 'safe')
-    return Hij
+    #G1 = np.zeros(S.shape)
+    G1 = np.einsum('pqrs,sr->pq', V2, dm1, dtype = complex)
+    H = H1 + 0.5 * G1
+    return np.einsum('pq,qp->', H, dm1, dtype = complex)
 
-def calcSymmetryProjector(nao, sz, nGrid = 8):
+def calcSzSymmetryProjector(nao, sz, nGrid = 8):
     Wg = []
     Rg = []
     for p in range(nGrid):
@@ -34,8 +35,8 @@ def calcSymmetryProjector(nao, sz, nGrid = 8):
 
 def calcEnergyNumeratorDenominator(S, H1, V2, Bra, Ket, Wg, Rg):
     #integrate
-    N = 0.0
     D = 0.0
+    N = 0.0
     for i in range(len(Wg)):
         Ketg = Rg[i].dot(Ket)
 
@@ -66,6 +67,7 @@ def generateSingleExcitations(ne, nso):
             indices.append(orbs)
     return excitations, indices
 
+#note this returns an nso by nso matrix but only the top right block is non-zero
 def calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, mo_coeff, Wg, Rg):
     Npq = np.zeros(S.shape, dtype = complex)
     Dpq = np.zeros(S.shape, dtype = complex)
@@ -166,7 +168,7 @@ def jac(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
 
 def pGHF(mol, mo_coeff = None):
     #basic molecule info and integrals
-    m = float(mol.spin) / 2
+    sz = float(mol.spin) / 2
     ne = mol.nelectron
     nao = mol.nao
     nso = 2 * mol.nao
@@ -179,11 +181,12 @@ def pGHF(mol, mo_coeff = None):
     S = lalg.block_diag(s, s)
     h1 = t + v1
     H1 = lalg.block_diag(h1, h1)
-    V2 = np.zeros((nso, ) * 4)
+    V2 = np.zeros((nso, ) * 4) #note the two-electron integrals are anti-symmetrized
     for i in range(nao):
         for j in range(nao):
             for k in range(nao):
                 for l in range(nao):
+                    #spin-orbital indices
                     ia = i
                     ja = j
                     ka = k
@@ -194,15 +197,26 @@ def pGHF(mol, mo_coeff = None):
                     kb = k + nao
                     lb = l + nao
 
+                    #all non-zero spin-orbital index tuples
                     aaaa = (ia, ja, ka, la)
                     bbbb = (ib, jb, kb, lb)
+
                     aabb = (ia, ja, kb, lb)
                     bbaa = (ib, jb, ka, la)
 
-                    V2[aaaa] = v2[(i, j, k, l)]
-                    V2[bbbb] = v2[(i, j, k, l)]
+                    abba = (ia, jb, kb, la)
+                    baab = (ib, ja, ka, lb)
+
+                    #non-zero integrals
+                    V2[aaaa] = v2[(i, j, k, l)] - v2[(i, l, k, j)]
+                    V2[bbbb] = v2[(i, j, k, l)] - v2[(i, l, k, j)]
+
                     V2[aabb] = v2[(i, j, k, l)]
                     V2[bbaa] = v2[(i, j, k, l)]
+
+                    V2[abba] = - v2[(i, l, k, j)]
+                    V2[baab] = - v2[(i, l, k, j)]
+
 
     if mo_coeff is None:
         orbs = np.random.randn(nso, nso)
@@ -212,14 +226,17 @@ def pGHF(mol, mo_coeff = None):
         assert(mo_coeff.shape[1] == nso)
         orbs = mo_coeff
 
-    #symmetry projector
-    Wg, Rg = calcSymmetryProjector(nao, m, 10)
+    #Sz symmetry projector
+    nGrid = 6
+    Wg, Rg = calcSzSymmetryProjector(nao, sz, nGrid)
 
     Eold = 100
-    dt = 1.0
-    tol = 1.e-10
+    dt = 0.1
+    tol = 1.e-8
     doPrint = True
-    for m in range(50):
+    for m in range(1):
+        iterStart = time.time()
+
         #current wavefunction
         Psi = orbs[:, 0:ne]
 
@@ -236,24 +253,40 @@ def pGHF(mol, mo_coeff = None):
         E0 = E + mol.energy_nuc()
 
         #gradient
-        G = (Npq / D) - E * (Dpq / D)
-        G = G - G.conj().T
-        Gvec = G.flatten()
+        Gpq = (Npq / D) - E * (Dpq / D)
+        Gpq = Gpq - Gpq.conj().T
+        Gvec = Gpq.flatten()
         Gnorm = lalg.norm(Gvec)
 
+        timeEnergyGradient = time.time()
+
         #scipy optimizer
-        params = np.zeros((2 * ne * (nso - ne), ), dtype = float)
-        sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'L-BFGS-B', jac = jac)
-        update = real_to_complex(sol.x)
-        paramMat = update.reshape((ne, (nso - ne)))
-        K = np.zeros(((nso, nso)), dtype = complex)
-        K[0:ne, ne:nso] = paramMat
-        K = K - K.conj().T
+        paramsMat = - dt * Gpq[0:ne, ne:nso]
+        params = paramsMat.flatten()
+        params = complex_to_real(params)
+        #params = np.zeros((2 * ne * (nso - ne), ), dtype = float)
+
+        #sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'L-BFGS-B', jac = jac)
+        #sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'TNC', jac = jac)
+        #sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'SLSQP', jac = jac, tol = tol, options = {'maxiter' : 10})
+        #sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'SLSQP', jac = jac, tol = tol)
+
+        #update = real_to_complex(sol.x)
+        #updateMat = update.reshape((ne, (nso - ne)))
+
+        timeOptimizer = time.time()
+
+        #build kappa matrix from params
+        #K = np.zeros(((nso, nso)), dtype = complex)
+        #K[0:ne, ne:nso] = updateMat
+        #K = K - K.conj().T
+
+        #if optimizer fails use the gradient to update
+        #if sol.success == False:
+        K = - dt * Gpq
 
         #orbital rotation
-        #U = lalg.expm(dt * G)
-        U = lalg.expm(- dt * K)
-        #U = np.real(U) #when performing only Sz projection, we want real orbitals
+        U = lalg.expm(- K)
 
         #update orbitals
         orbs = orbs.dot(U)
@@ -266,28 +299,26 @@ def pGHF(mol, mo_coeff = None):
         #print
         if doPrint == True:
             print(f"-------------------------------- {m} --------------------------------")
-            print("Projected values")
 
+            print("Projected values")
             print(f"Denominator: {D}")
             print(f"Numerator: {N}")
             print(f"Electronic Energy: {E}")
             print(f"Energy: {E0}")
+            #print("Gradient")
+            #print(np.real(Gpq))
+            #print(np.imag(Gpq))
+            print(f"Gradient Norm: {Gnorm}")
+            print(f"Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
 
-            print("Gradient")
-            print(np.real(G))
-            print(np.imag(G))
+            print("Scipy Optimizer")
+            #print(sol)
+            print(f"Time for Optimizer: {timeOptimizer - timeEnergyGradient}")
 
-            print(f"Norm: {Gnorm}")
-
-            print("\n scipy optimizer")
-            print(sol)
-            print("\n")
-
-            print("Orbital Rotation")
-            print(U)
-
-            print("Orbitals")
-            print(orbs)
+            #print("Orbital Rotation")
+            #print(U)
+            #print("Orbitals")
+            #print(orbs)
 
             print(f"Error: {error}")
 
@@ -295,34 +326,53 @@ def pGHF(mol, mo_coeff = None):
         if (error < tol):
             break
 
-    return E, orbs
+    return E0, orbs
 
 
 np.set_printoptions(precision=6)
 np.set_printoptions(suppress=True)
 
+N = 20
+a = 1.4
+
+atomstring = ""
+for i in range(N):
+    atomstring += f"H 0 0 {i * a};"
+
 mol = gto.Mole()
-#mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8; H 0 0 4.2'
-mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8;'
+mol.atom = atomstring
+#mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8;'
 #mol.atom = 'H 0 0 0; H 0 0 1.4'
 #mol.atom = 'H 0 0 0'
 #mol.atom = 'Li 0 0 0'
-#mol.basis = 'sto-3g'
+mol.basis = 'sto-3g'
 #mol.basis = '631g'
 #mol.basis = 'ccpvdz'
 mol.verbose = 4
-mol.spin = 1
+mol.spin = 0
 mol.unit = 'bohr'
 mol.build()
 
+norb = mol.nao
 mf = scf.GHF(mol)
-mf.kernel()
+dm = mf.get_init_guess()
+dm = dm + np.random.rand(2 * norb, 2 * norb) / 100
+mf.max_cycle = 100
+mf.kernel(dm0 = dm)
+
 S = mf.get_ovlp()
 occidx = mf.mo_occ > 0
 occOrb = mf.mo_coeff[:, occidx]
-print(occOrb)
+#print(occOrb)
 fock = mf.get_hcore() + mf.get_veff()
-print(fock)
-print("\n")
+#print(fock)
+#print("\n")
 
 E0, mo = pGHF(mol, mf.mo_coeff)
+
+print("\n")
+print("Final Result")
+print("Energy")
+print(E0)
+#print("Molecular Orbitals")
+#print(mo)

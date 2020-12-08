@@ -14,14 +14,34 @@ def calcDensityMatrix(S, Bra, Ket):
     ovlpInv = lalg.inv(ovlpMat)
     return Ket.dot(ovlpInv).dot(Bra.conj().T)
 
-def calcHamiltonianMatrixElement(H1, V2, dm1):
-    #Hij = np.einsum('pq,qp->', H1, dm1, casting = 'safe')
-    #Hij += 0.5 * np.einsum('pqrs,qp,sr->', V2, dm1, dm1, casting = 'safe')
-    #Hij -= 0.5 * np.einsum('psrq,qp,sr->', V2, dm1, dm1, casting = 'safe')
-    Hij = np.einsum('pq,qp->', H1, dm1)
-    Hij += 0.5 * np.einsum('pqrs,qp,sr->', V2, dm1, dm1)
-    Hij -= 0.5 * np.einsum('psrq,qp,sr->', V2, dm1, dm1)
-    return Hij
+def calcHamiltonianMatrixElement(H1, v2, dm1):
+    nso = H1.shape[0]
+    nao = nso // 2
+
+    dm1aa = dm1[:nao, :nao]
+    dm1bb = dm1[nao:, nao:]
+    dm1ab = dm1[:nao, nao:]
+    dm1ba = dm1[nao:, :nao]
+
+    #the spin indices on the J, K matrices are from the contracted indices
+    Jaa = np.einsum('pqrs,sr->pq', v2, dm1aa, dtype = complex)
+
+    Jbb = np.einsum('pqrs,sr->pq', v2, dm1bb, dtype = complex)
+
+    Kaa = np.einsum('psrq,sr->pq', v2, dm1aa, dtype = complex)
+    Kbb = np.einsum('psrq,sr->pq', v2, dm1bb, dtype = complex)
+
+    Kab = np.einsum('psrq,sr->pq', v2, dm1ba, dtype = complex)
+    Kba = np.einsum('psrq,sr->pq', v2, dm1ab, dtype = complex)
+
+    G1 = np.zeros((nso, nso), dtype = complex)
+    G1[:nao, :nao] = Jaa + Jbb - Kaa
+    G1[nao:, nao:] = Jaa + Jbb - Kbb
+    G1[:nao, nao:] = - Kba
+    G1[nao:, :nao] = - Kab
+
+    H = H1 + 0.5 * G1
+    return np.einsum('pq,qp->', H, dm1, dtype = complex)
 
 def calcSzSymmetryProjector(nao, sz, nGrid = 8):
     Wg = []
@@ -36,7 +56,7 @@ def calcSzSymmetryProjector(nao, sz, nGrid = 8):
         Rg.append(r)
     return Wg, Rg
 
-def calcEnergyNumeratorDenominator(S, H1, V2, Bra, Ket, Wg, Rg):
+def calcEnergyNumeratorDenominator(S, H1, v2, Bra, Ket, Wg, Rg):
     #integrate
     D = 0.0
     N = 0.0
@@ -47,7 +67,7 @@ def calcEnergyNumeratorDenominator(S, H1, V2, Bra, Ket, Wg, Rg):
         Og = calcOverlap(S, Bra, Ketg)
 
         dmg = calcDensityMatrix(S, Bra, Ketg)
-        Eg = calcHamiltonianMatrixElement(H1, V2, dmg)
+        Eg = calcHamiltonianMatrixElement(H1, v2, dmg)
         Eg = Og * Eg
 
         #averages
@@ -71,7 +91,7 @@ def generateSingleExcitations(ne, nso):
     return excitations, indices
 
 #note this returns an nso by nso matrix but only the top right block is non-zero
-def calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+def calcGradientEnergyNumeratorDenominator(S, H1, v2, nelectron, mo_coeff, Wg, Rg):
     Npq = np.zeros(S.shape, dtype = complex)
     Dpq = np.zeros(S.shape, dtype = complex)
 
@@ -82,7 +102,7 @@ def calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, mo_coeff, Wg, R
     excitations, indices = generateSingleExcitations(nelectron, S.shape[0])
     for n in range(len(excitations)):
         Psi_n = mo_coeff[:, indices[n]]
-        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi_n, Psi, Wg, Rg)
+        N, D = calcEnergyNumeratorDenominator(S, H1, v2, Psi_n, Psi, Wg, Rg)
 
         Npq[tuple(excitations[n])] = N
         Dpq[tuple(excitations[n])] = D
@@ -114,7 +134,7 @@ def real_to_complex(z): #real vector of length 2n -> complex of length n
 def complex_to_real(z): #complex vector of length n -> real of length 2n
     return np.concatenate((np.real(z), np.imag(z)))
 
-def fun(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+def fun(params, S, H1, v2, nelectron, mo_coeff, Wg, Rg):
     nso = S.shape[0]
     nao = nso // 2
 
@@ -133,12 +153,12 @@ def fun(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
     Psi = orbs[:, 0:nelectron]
 
     #energy terms
-    N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+    N, D = calcEnergyNumeratorDenominator(S, H1, v2, Psi, Psi, Wg, Rg)
     N = np.real(N)
     D = np.real(D)
     return N / D
 
-def jac(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
+def jac(params, S, H1, v2, nelectron, mo_coeff, Wg, Rg):
     nso = S.shape[0]
     nao = nso // 2
 
@@ -157,12 +177,12 @@ def jac(params, S, H1, V2, nelectron, mo_coeff, Wg, Rg):
     Psi = orbs[:, 0:nelectron]
 
     #energy terms
-    N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+    N, D = calcEnergyNumeratorDenominator(S, H1, v2, Psi, Psi, Wg, Rg)
     N = np.real(N)
     D = np.real(D)
 
     #gradient terms
-    Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, V2, nelectron, orbs, Wg, Rg)
+    Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, v2, nelectron, orbs, Wg, Rg)
 
     G = (Npq / D) - (N / D) * (Dpq / D)
     G = G[0:nelectron, nelectron:nso]
@@ -184,30 +204,6 @@ def pGHF(mol, mo_coeff = None):
     S = lalg.block_diag(s, s)
     h1 = t + v1
     H1 = lalg.block_diag(h1, h1)
-    V2 = np.zeros((nso, ) * 4)
-    for i in range(nao):
-        for j in range(nao):
-            for k in range(nao):
-                for l in range(nao):
-                    ia = i
-                    ja = j
-                    ka = k
-                    la = l
-
-                    ib = i + nao
-                    jb = j + nao
-                    kb = k + nao
-                    lb = l + nao
-
-                    aaaa = (ia, ja, ka, la)
-                    bbbb = (ib, jb, kb, lb)
-                    aabb = (ia, ja, kb, lb)
-                    bbaa = (ib, jb, ka, la)
-
-                    V2[aaaa] = v2[(i, j, k, l)]
-                    V2[bbbb] = v2[(i, j, k, l)]
-                    V2[aabb] = v2[(i, j, k, l)]
-                    V2[bbaa] = v2[(i, j, k, l)]
 
     if mo_coeff is None:
         orbs = np.random.randn(nso, nso)
@@ -217,26 +213,31 @@ def pGHF(mol, mo_coeff = None):
         assert(mo_coeff.shape[1] == nso)
         orbs = mo_coeff
 
+    #slight amount of noise helps optimization
+    orbs += np.random.randn(nso, nso) / 100
+
     #Sz symmetry projector
-    Wg, Rg = calcSzSymmetryProjector(nao, sz, 10)
+    nGrid = 10
+    Wg, Rg = calcSzSymmetryProjector(nao, sz, nGrid)
 
     Eold = 100
-    dt = 0.01
+    dt = 0.1
     tol = 1.e-8
     doPrint = True
-    for m in range(500):
+    calcStart = time.time()
+    for m in range(50):
         iterStart = time.time()
 
         #current wavefunction
         Psi = orbs[:, 0:ne]
 
         #energy terms
-        N, D = calcEnergyNumeratorDenominator(S, H1, V2, Psi, Psi, Wg, Rg)
+        N, D = calcEnergyNumeratorDenominator(S, H1, v2, Psi, Psi, Wg, Rg)
         N = np.real(N)
         D = np.real(D)
 
         #gradient terms
-        Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, V2, ne, orbs, Wg, Rg)
+        Npq, Dpq = calcGradientEnergyNumeratorDenominator(S, H1, v2, ne, orbs, Wg, Rg)
 
         #electronic and total energy
         E = N / D
@@ -256,9 +257,12 @@ def pGHF(mol, mo_coeff = None):
         params = complex_to_real(params)
         #params = np.zeros((2 * ne * (nso - ne), ), dtype = float)
 
-        #sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'L-BFGS-B', jac = jac)
-        #sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'TNC', jac = jac)
-        sol = opt.minimize(fun, params, args = (S, H1, V2, ne, orbs, Wg, Rg), method = 'SLSQP', jac = jac)
+        iterTol = tol
+        if m == 0:
+            iterTol = 1.e-6
+        sol = opt.minimize(fun, params, args = (S, H1, v2, ne, orbs, Wg, Rg), method = 'SLSQP', jac = jac, tol = iterTol)
+        #sol = opt.minimize(fun, params, args = (S, H1, v2, ne, orbs, Wg, Rg), method = 'SLSQP', tol = tol)
+        #sol = opt.minimize(fun, params, args = (S, H1, v2, ne, orbs, Wg, Rg), method = 'SLSQP', jac = jac, tol = tol, options = {'maxiter' : 10})
 
         update = real_to_complex(sol.x)
         updateMat = update.reshape((ne, (nso - ne)))
@@ -290,19 +294,22 @@ def pGHF(mol, mo_coeff = None):
             print(f"-------------------------------- {m} --------------------------------")
 
             print("Projected values")
-            print(f"Denominator: {D}")
-            print(f"Numerator: {N}")
-            print(f"Electronic Energy: {E}")
-            print(f"Energy: {E0}")
+            print(f"  Denominator: {D}")
+            print(f"  Numerator: {N}")
+            print(f"  Electronic Energy: {E}")
+            print(f"  Energy: {E0}")
             #print("Gradient")
             #print(np.real(Gpq))
             #print(np.imag(Gpq))
-            print(f"Gradient Norm: {Gnorm}")
-            print(f"Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
+            print(f"  Gradient Norm: {Gnorm}")
+            print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
 
             print("Scipy Optimizer")
-            print(sol)
-            print(f"Time for Optimizer: {timeOptimizer - timeEnergyGradient}")
+            print(f"  message: " + sol.message)
+            print(f"  fun: {sol.fun}")
+            print(f"  jac: {lalg.norm(sol.jac)}")
+            print(f"  nit: {sol.nit}")
+            print(f"  Time for Optimizer: {timeOptimizer - timeEnergyGradient}")
 
             #print("Orbital Rotation")
             #print(U)
@@ -315,13 +322,17 @@ def pGHF(mol, mo_coeff = None):
         if (error < tol):
             break
 
+    if doPrint == True:
+        print(f"\nCalculation Complete")
+        print(f"  Total Time: {time.time() - calcStart}")
+        print(f"  Total Energy: {E0}")
     return E0, orbs
 
 
 np.set_printoptions(precision=6)
 np.set_printoptions(suppress=True)
 
-N = 4
+N = 30
 a = 1.4
 
 atomstring = ""
@@ -359,9 +370,9 @@ fock = mf.get_hcore() + mf.get_veff()
 
 E0, mo = pGHF(mol, mf.mo_coeff)
 
-print("\n")
-print("Final Result")
-print("Energy")
-print(E0)
+#print("\n")
+#print("Final Result")
+#print("Energy")
+#print(E0)
 #print("Molecular Orbitals")
 #print(mo)
