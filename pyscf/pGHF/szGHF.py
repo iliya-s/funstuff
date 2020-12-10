@@ -1,4 +1,3 @@
-#INFO: **** input file is /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/pGHF.py ****
 from pyscf import gto, scf, tools
 import numpy as np
 import scipy.linalg as lalg
@@ -282,7 +281,7 @@ def pGHF(mol, mo_coeff):
 np.set_printoptions(precision=6)
 np.set_printoptions(suppress=True)
 
-N = 10
+N = 3
 a = 1.4
 
 atomstring = ""
@@ -299,7 +298,7 @@ mol.basis = 'sto-3g'
 #mol.basis = '631g'
 #mol.basis = 'ccpvdz'
 mol.verbose = 4
-mol.spin = 0
+mol.spin = 1
 mol.unit = 'bohr'
 mol.build()
 
@@ -326,129 +325,3 @@ E0, mo = pGHF(mol, mf.mo_coeff)
 #print(E0)
 #print("Molecular Orbitals")
 #print(mo)
-#INFO: ******************** input file end ********************
-
-
-System: uname_result(system='Linux', node='ubuntu', release='5.4.0-54-generic', version='#60-Ubuntu SMP Fri Nov 6 10:37:59 UTC 2020', machine='x86_64', processor='x86_64')  Threads 3
-Python 3.8.3 (default, May 19 2020, 18:47:26) 
-[GCC 7.3.0]
-numpy 1.19.4  scipy 1.4.1
-Date: Tue Dec  8 08:10:21 2020
-PySCF version 1.7.5
-PySCF path  /home/iliya/miniconda3/lib/python3.8/site-packages/pyscf
-
-[CONFIG] conf_file None
-[INPUT] verbose = 4
-[INPUT] num. atoms = 10
-[INPUT] num. electrons = 10
-[INPUT] charge = 0
-[INPUT] spin (= nelec alpha-beta = 2S) = 0
-[INPUT] symmetry False subgroup None
-[INPUT] Mole.unit = bohr
-[INPUT]  1 H      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
-[INPUT]  2 H      0.000000000000   0.000000000000   0.740848095288 AA    0.000000000000   0.000000000000   1.400000000000 Bohr
-[INPUT]  3 H      0.000000000000   0.000000000000   1.481696190576 AA    0.000000000000   0.000000000000   2.800000000000 Bohr
-[INPUT]  4 H      0.000000000000   0.000000000000   2.222544285864 AA    0.000000000000   0.000000000000   4.200000000000 Bohr
-[INPUT]  5 H      0.000000000000   0.000000000000   2.963392381152 AA    0.000000000000   0.000000000000   5.600000000000 Bohr
-[INPUT]  6 H      0.000000000000   0.000000000000   3.704240476440 AA    0.000000000000   0.000000000000   7.000000000000 Bohr
-[INPUT]  7 H      0.000000000000   0.000000000000   4.445088571728 AA    0.000000000000   0.000000000000   8.400000000000 Bohr
-[INPUT]  8 H      0.000000000000   0.000000000000   5.185936667016 AA    0.000000000000   0.000000000000   9.800000000000 Bohr
-[INPUT]  9 H      0.000000000000   0.000000000000   5.926784762304 AA    0.000000000000   0.000000000000  11.200000000000 Bohr
-[INPUT] 10 H      0.000000000000   0.000000000000   6.667632857592 AA    0.000000000000   0.000000000000  12.600000000000 Bohr
-
-nuclear repulsion = 13.7783446712018
-number of shells = 10
-number of NR pGTOs = 30
-number of NR cGTOs = 10
-basis = sto-3g
-ecp = {}
-CPU time:         0.35
-
-
-******** <class 'pyscf.scf.ghf.GHF'> ********
-method = GHF
-initial guess = minao
-damping factor = 0
-level_shift factor = 0
-DIIS = <class 'pyscf.scf.diis.CDIIS'>
-diis_start_cycle = 1
-diis_space = 8
-SCF conv_tol = 1e-09
-SCF conv_tol_grad = None
-SCF max_cycles = 100
-direct_scf = True
-direct_scf_tol = 1e-13
-chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/tmpsz5xrwn6
-max_memory 4000 MB (current use 77 MB)
-Set gradient conv threshold to 3.16228e-05
-init E= -5.39767822290986
-  HOMO = 0.0410148274017898  LUMO = 0.338737995935094
-cycle= 1 E= -5.03111759338059  delta_E= 0.367  |g|= 0.13  |ddm|= 1.91
-  HOMO = -0.233094595441335  LUMO = 0.299105192979989
-cycle= 2 E= -5.04833962135007  delta_E= -0.0172  |g|= 0.0335  |ddm|= 0.382
-  HOMO = -0.229477959620974  LUMO = 0.323596592802508
-cycle= 3 E= -5.0496160630991  delta_E= -0.00128  |g|= 0.0122  |ddm|= 0.0742
-  HOMO = -0.235094506048903  LUMO = 0.32889423395611
-cycle= 4 E= -5.04981878955479  delta_E= -0.000203  |g|= 0.00102  |ddm|= 0.0457
-  HOMO = -0.235366847446477  LUMO = 0.329034957214431
-cycle= 5 E= -5.04982027826454  delta_E= -1.49e-06  |g|= 0.000547  |ddm|= 0.00265
-  HOMO = -0.235502188758662  LUMO = 0.329045155854164
-cycle= 6 E= -5.04982099477061  delta_E= -7.17e-07  |g|= 0.000353  |ddm|= 0.00216
-  HOMO = -0.235596995309423  LUMO = 0.329103819095021
-cycle= 7 E= -5.04982159068733  delta_E= -5.96e-07  |g|= 0.000204  |ddm|= 0.00312
-  HOMO = -0.235578671590166  LUMO = 0.329093522945322
-cycle= 8 E= -5.04982181812066  delta_E= -2.27e-07  |g|= 0.000155  |ddm|= 0.00181
-  HOMO = -0.235591261518902  LUMO = 0.329103952419969
-cycle= 9 E= -5.04982209670608  delta_E= -2.79e-07  |g|= 4.98e-05  |ddm|= 0.00405
-  HOMO = -0.235591240357563  LUMO = 0.329104734395768
-cycle= 10 E= -5.04982211658774  delta_E= -1.99e-08  |g|= 1.84e-05  |ddm|= 0.00102
-  HOMO = -0.235596238029784  LUMO = 0.329102094879653
-cycle= 11 E= -5.04982211866573  delta_E= -2.08e-09  |g|= 2e-06  |ddm|= 0.000403
-  HOMO = -0.235596242950586  LUMO = 0.329102884667125
-cycle= 12 E= -5.04982211867327  delta_E= -7.54e-12  |g|= 5.14e-07  |ddm|= 1.59e-05
-  HOMO = -0.23559632001927  LUMO = 0.32910281472947
-Extra cycle  E= -5.04982211867354  delta_E= -2.7e-13  |g|= 2.5e-07  |ddm|= 1.04e-06
-converged SCF energy = -5.04982211867354  <S^2> = 4.4808601e-13  2S+1 = 1
--------------------------------- 0 --------------------------------
-Projected values
-  Electronic Energy: -18.82671303955225
-  Total Energy: -5.048368368350431
-  Gradient Norm: 0.04283355622853834
-  Time for Energy and Gradient: 0.03668146603740752
-Scipy Optimizer
-  message: Optimization terminated successfully.
-  fun: -18.878066997750494
-  jac: 8.09474152912902e-05
-  nit: 30
-  Time for Optimizer: 0.9930206858552992
-Error: 118.82671303955225
--------------------------------- 1 --------------------------------
-Projected values
-  Electronic Energy: -18.878066997750494
-  Total Energy: -5.099722326548676
-  Gradient Norm: 5.311648890950256e-05
-  Time for Energy and Gradient: 0.025477901101112366
-Scipy Optimizer
-  message: Optimization terminated successfully.
-  fun: -18.878066997750494
-  jac: 5.311648890950256e-05
-  nit: 1
-  Time for Optimizer: 0.0289375230204314
-Error: 0.05135395819824495
--------------------------------- 2 --------------------------------
-Projected values
-  Electronic Energy: -18.878066997750494
-  Total Energy: -5.099722326548676
-  Gradient Norm: 5.311648890950256e-05
-  Time for Energy and Gradient: 0.025927299866452813
-Scipy Optimizer
-  message: Optimization terminated successfully.
-  fun: -18.878066997750494
-  jac: 5.311648890950256e-05
-  nit: 1
-  Time for Optimizer: 0.02908622706308961
-Error: 0.0
-
-Calculation Complete
-  Total Time: 1.1393991119693965
-  Total Energy: -5.099722326548676

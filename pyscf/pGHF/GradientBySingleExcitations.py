@@ -332,7 +332,7 @@ def pGHF(mol, mo_coeff = None):
 np.set_printoptions(precision=6)
 np.set_printoptions(suppress=True)
 
-N = 30
+N = 3
 a = 1.4
 
 atomstring = ""
@@ -349,7 +349,7 @@ mol.basis = 'sto-3g'
 #mol.basis = '631g'
 #mol.basis = 'ccpvdz'
 mol.verbose = 4
-mol.spin = 0
+mol.spin = 1
 mol.unit = 'bohr'
 mol.build()
 

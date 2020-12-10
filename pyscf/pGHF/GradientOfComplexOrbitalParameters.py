@@ -98,8 +98,7 @@ def calcEnergy(S, H1, v2, Psi, Wg, Rg):
     E = N / D
     return np.real(E)
 
-#this returns the gradient with respect to a,b and a,b* parameters of the energy
-def calcComplexGradient(S, H1, v2, Psi, Wg, Rg):
+def calcGradient(S, H1, v2, Psi, Wg, Rg):
     Bra = Psi.copy()
     Ket = Psi.copy()
 
@@ -204,33 +203,11 @@ def calcComplexGradient(S, H1, v2, Psi, Wg, Rg):
     E = N / D
     J = Nab / D - E * (Dab / D)
     J_bar = Nab_bar / D - E * (Dab_bar / D)
-    return J, J_bar
 
-#this will calculate the gradient with respect to the real and imaginary part of the orbital parameters, given the gradients with respect to a,b and a,b*
-def calcGradient(J, J_bar):
     Jr = J + J_bar
     Ji = 1j * (J - J_bar)
-    return np.real(Jr), np.real(Ji)
+    return np.concatenate((np.real(Jr), np.real(Ji)), axis = 0)
 
-#U here is a given molecular orbital rotation
-def calcNonRedundantEnergy(S, H1, v2, nelectron, mo_coeff, U, Wg, Rg):
-    nso = S.shape[0]
-    orbs = mo_coeff.dot(U)
-    Psi = orbs[:, 0:nelectron]
-    return calcEnergy(S, H1, v2, Psi, Wg, Rg)
-
-def calcNonRedundantGradient(S, H1, v2, nelectron, mo_coeff, U, Wg, Rg):
-    nso = S.shape[0]
-    orbs = mo_coeff.dot(U)
-    Psi = orbs[:, 0:nelectron]
-
-    Jmi, Jmi_bar = calcComplexGradient(S, H1, v2, Psi, Wg, Rg)
-
-    Gqi = np.einsum('mi,mq->qi', Jmi, mo_coeff, dtype = complex, optimize = True)
-    Gqi_bar = np.einsum('mi,mq->qi', Jmi_bar, mo_coeff.conj(), dtype = complex, optimize = True)
-    return calcGradient(Gqi, Gqi_bar)
-
-#finite difference gradients
 def calcGradientFiniteDifference(S, H1, v2, Psi, Wg, Rg):
     ds = 1.e-6
     E0 = calcEnergy(S, H1, v2, Psi, Wg, Rg)
@@ -253,55 +230,7 @@ def calcGradientFiniteDifference(S, H1, v2, Psi, Wg, Rg):
 
             Ji[a, b] = (E - E0) / ds
 
-    #return np.concatenate((Jr, Ji), axis = 0)
-    return Jr, Ji
-
-def calcNonRedundantGradientFiniteDifference(S, H1, v2, nelectron, mo_coeff, U, Wg, Rg):
-    ds = 1.e-6
-    nso = S.shape[0]
-
-    orbs = mo_coeff.dot(U)
-    Psi = orbs[:, 0:nelectron]
-    E0 = calcEnergy(S, H1, v2, Psi, Wg, Rg)
-
-    Jr = np.zeros((nso, nelectron), dtype = float)
-    for a in range(Jr.shape[0]):
-        for j in range(Jr.shape[1]):
-            Ucopy = U.copy()
-            Ucopy[a, j] += ds
-            orbs = mo_coeff.dot(Ucopy)
-            Psi = orbs[:, 0:nelectron]
-            E = calcEnergy(S, H1, v2, Psi, Wg, Rg)
-
-            Jr[a, j] = (E - E0) / ds
-
-    Ji = np.zeros((nso, nelectron), dtype = float)
-    for a in range(Ji.shape[0]):
-        for j in range(Ji.shape[1]):
-            Ucopy = U.copy()
-            Ucopy[a, j] += 1j * ds
-            orbs = mo_coeff.dot(Ucopy)
-            Psi = orbs[:, 0:nelectron]
-            E = calcEnergy(S, H1, v2, Psi, Wg, Rg)
-
-            Ji[a, j] = (E - E0) / ds
-
-    return Jr, Ji
-
-def modifiedGramSchmidt(V, S = None):
-    if S is None:
-        S = np.identity(V.shape[0], dtype = V.dtype)
-    U = np.zeros(V.shape, dtype = V.dtype)
-
-    U[:, 0] = V[:, 0] / np.sqrt( V[:, 0].conj().T.dot(S).dot(V[:, 0]) )
-    for i in range(1, V.shape[1]):
-        U[:, i] = V[:, i]
-        for j in range(i):
-            U[:, i] = U[:, i] - ( U[:, j].conj().T.dot(S).dot(U[:, i]) ) / ( U[:, j].conj().T.dot(S).dot(U[:, j]) ) * U[:, j]
-
-        U[:, i] = U[:, i] / np.sqrt( U[:, i].conj().T.dot(S).dot(U[:, i]) )
-
-    return U
+    return np.concatenate((Jr, Ji), axis = 0)
 
 #the following four functions are helpers to use scipy's optimization library
 
@@ -344,13 +273,12 @@ def pGHF(mol, mo_coeff):
 
     assert(mo_coeff.shape[0] == nso)
     assert(mo_coeff.shape[1] == nso)
-    orbs = mo_coeff.copy()
+    #Psi will always be the wavefunction
+    Psi = mo_coeff[:, 0:ne] + 1j * np.zeros((nso, ne), dtype = float)
 
     #slight amount of noise helps optimization
-    orbs = orbs + np.random.randn(nso, nso) / 100
-    orbs = orbs + 1j * np.random.randn(nso, nso) / 100
-    orbs = modifiedGramSchmidt(orbs, S)
-    U0 = np.identity(nso, dtype = complex)
+    Psi += np.random.randn(nso, ne) / 100
+    Psi += 1j * np.random.randn(nso, ne) / 100
 
     #Sz symmetry projector
     nGrid = 8
@@ -358,48 +286,44 @@ def pGHF(mol, mo_coeff):
 
     Eold = 100
     tol = 1.e-8
-    dt = 0.1
+    dt = 1.0
     doPrint = True
     calcStart = time.time()
-    for m in range(50):
+    for m in range(1):
         iterStart = time.time()
 
-        #initial orbital rotation
-        U = U0.copy()
-
         #energy
-        E = calcNonRedundantEnergy(S, H1, v2, ne, orbs, U, Wg, Rg)
+        E = calcEnergy(S, H1, v2, Psi, Wg, Rg)
 
         #gradient
-        Jr, Ji = calcNonRedundantGradient(S, H1, v2, ne, orbs, U, Wg, Rg)
-        #Jfdr, Jfdi = calcNonRedundantGradientFiniteDifference(S, H1, v2, ne, orbs, U, Wg, Rg)
+        J = calcGradient(S, H1, v2, Psi, Wg, Rg)
+        Jfd = calcGradientFiniteDifference(S, H1, v2, Psi, Wg, Rg)
+        print("jac")
+        print(J)
+        print("fin-diff")
+        print(Jfd)
 
         #total energy
         E0 = E + mol.energy_nuc()
 
         #gradient
-        J = Jr + 1j * Ji
-        J_vec = J.flatten()
-        J_norm = lalg.norm(J_vec)
+        Jvec = J.flatten()
+        Jnorm = lalg.norm(Jvec)
 
         timeEnergyGradient = time.time()
 
-        #gradient descent
-        updateMat = - dt * J[ne:nso, 0:ne]
-
         #scipy optimizer
-        #params = complex_to_real(Psi.flatten())
+        params = complex_to_real(Psi.flatten())
         #params = params - dt * Jvec
 
         #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'SLSQP', jac = jac, tol = tol)
         #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'L-BFGS-B', jac = jac, tol = tol)
 
-        #new rotation matrix
-        U[ne:nso, 0:ne] = updateMat
-        U[0:ne, ne:nso] = - updateMat.conj().T
-
         #update parameters
-        orbs = orbs.dot(U)
+        #if sol.success == True:
+        #    Psi = real_to_complex(sol.x).reshape((nso, ne))
+        #else:
+        #    Psi = real_to_complex(params - dt * Jvec).reshape((nso, ne))
 
         timeOptimizer = time.time()
 
@@ -414,7 +338,7 @@ def pGHF(mol, mo_coeff):
             print("Projected values")
             print(f"  Electronic Energy: {E}")
             print(f"  Total Energy: {E0}")
-            print(f"  Gradient Norm: {J_norm}")
+            print(f"  Gradient Norm: {Jnorm}")
             print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
 
             #print("Scipy Optimizer")
@@ -437,10 +361,10 @@ def pGHF(mol, mo_coeff):
         print(f"\nCalculation Complete")
         print(f"  Total Time: {time.time() - calcStart}")
         print(f"  Total Energy: {E0}")
-    return E0, orbs
+    return E0, Psi
 
 
-np.set_printoptions(precision=4)
+np.set_printoptions(precision=6)
 np.set_printoptions(suppress=True)
 
 N = 3
@@ -486,4 +410,4 @@ E0, mo = pGHF(mol, mf.mo_coeff)
 #print("Energy")
 #print(E0)
 #print("Molecular Orbitals")
-#print(mo)
+print(mo)
