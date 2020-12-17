@@ -208,7 +208,7 @@ def calcComplexGradient(S, H1, v2, Psi, Wg, Rg):
     return J, J_bar
 
 #this will calculate the gradient with respect to the real and imaginary part of the orbital parameters, given the gradients with respect to a,b and a,b*
-def calcRealImaginary(J, J_bar):
+def calcComplexGradient(J, J_bar):
     Jr = J + J_bar
     Ji = 1j * (J - J_bar)
     return np.real(Jr), np.real(Ji)
@@ -229,7 +229,7 @@ def calcNonRedundantGradient(S, H1, v2, nelectron, mo_coeff, U, Wg, Rg):
 
     Gqi = np.einsum('mi,mq->qi', Jmi, mo_coeff, dtype = complex, optimize = True)
     Gqi_bar = np.einsum('mi,mq->qi', Jmi_bar, mo_coeff.conj(), dtype = complex, optimize = True)
-    return calcRealImaginary(Gqi, Gqi_bar)
+    return calcGradient(Gqi, Gqi_bar)
 
 #finite difference gradients
 def calcGradientFiniteDifference(S, H1, v2, Psi, Wg, Rg):
@@ -317,31 +317,15 @@ def real_to_complex(z): #real vector of length 2n -> complex of length n
 def complex_to_real(z): #complex vector of length n -> real of length 2n
     return np.concatenate((np.real(z), np.imag(z)))
 
-def fun(params, nelectron, S, H1, v2, Wg, Rg):
-    paramVec = real_to_complex(params)
-    #wavefunction
-    nso = S.shape[0]
-    Psi = paramVec.reshape((nso, nelectron))
-    return calcEnergy(S, H1, v2, Psi, Wg, Rg)
-
-def jac(params, nelectron, S, H1, v2, Wg, Rg):
-    paramVec = real_to_complex(params)
-    #wavefunction
-    nso = S.shape[0]
-    Psi = paramVec.reshape((nso, nelectron))
-    Jr, Ji = calcGradient(S, H1, v2, Psi, Wg, Rg)
-    J = np.concatenate((Jr, Ji), axis = 0)
-    return J.flatten()
-
 def fun(params, S, H1, v2, nelectron, mo_coeff, Wg, Rg):
     #build parameter matrix, Uai block
     paramVec = real_to_complex(params)
     nso = S.shape[0]
     paramMat = paramVec.reshape((nso - nelectron, nelectron))
-    #unitary transformation
+    #Unitary transformation
     U = np.identity(nso, dtype = complex)
     U[nelectron:nso, 0:nelectron] = paramMat
-    #U[0:nelectron, nelectron:nso] = - paramMat.conj().T
+    U[0:nelectron, nelectron:nso] = - paramMat.conj().T
     return calcNonRedundantEnergy(S, H1, v2, nelectron, mo_coeff, U, Wg, Rg)
 
 def jac(params, S, H1, v2, nelectron, mo_coeff, Wg, Rg):
@@ -352,40 +336,14 @@ def jac(params, S, H1, v2, nelectron, mo_coeff, Wg, Rg):
     #Unitary transformation
     U = np.identity(nso, dtype = complex)
     U[nelectron:nso, 0:nelectron] = paramMat
-    #U[0:nelectron, nelectron:nso] = - paramMat.conj().T
+    U[0:nelectron, nelectron:nso] = - paramMat.conj().T
     #gradient
     Jr, Ji = calcNonRedundantGradient(S, H1, v2, nelectron, mo_coeff, U, Wg, Rg)
     Jr_vec = Jr[nelectron:nso, 0:nelectron].flatten()
     Ji_vec = Ji[nelectron:nso, 0:nelectron].flatten()
     return np.concatenate((Jr_vec, Ji_vec), axis = 0)
 
-class AMSgrad(object):
-    stepsize = 0.001
-    decay1 = 0.1
-    decay2 = 0.001
-    mom1 = None
-    mom2 = None
-
-    def __init__(self, stepsize, decay1, decay2, nParams):
-        self.stepsize = stepsize
-        self.decay1 = decay1
-        self.decay2 = decay2
-        self.mom1 = np.zeros((nParams, 1), dtype = float)
-        self.mom2 = np.zeros((nParams, 1), dtype = float)
-
-    def update(self, gradient):
-        assert(gradient.shape[0] == self.mom1.shape[0])
-
-        delta = np.zeros(gradient.shape)
-        for i in range(gradient.shape[0]):
-            self.mom1[i] = self.decay1 * gradient[i] + (1.0 - self.decay1) * self.mom1[i]
-            self.mom2[i] = max(self.mom2[i], self.decay2 * gradient[i] * gradient[i] + (1.0 - self.decay2) * self.mom2[i])
-
-            delta[i] = - self.stepsize * self.mom1[i] / (np.sqrt(self.mom2[i]) + 1.e-8)
-
-        return delta
-
-def pGHF(mol, mo_coeff, ovlp_mat = None):
+def pGHF(mol, mo_coeff):
     #basic molecule info and integrals
     sz = float(mol.spin) / 2
     ne = mol.nelectron
@@ -395,26 +353,21 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
     t = mol.intor('int1e_kin')
     v1 = mol.intor('int1e_nuc')
     v2 = mol.intor('int2e', aosym='s1')
-    assert(mo_coeff.shape[0] == nso)
-    assert(mo_coeff.shape[1] == nso)
 
     #spin integrals
     S = lalg.block_diag(s, s)
     h1 = t + v1
     H1 = lalg.block_diag(h1, h1)
 
-    #initial orbital rotation is the identity
-    U0 = np.identity(nso, dtype = complex)
+    assert(mo_coeff.shape[0] == nso)
+    assert(mo_coeff.shape[1] == nso)
+    orbs = mo_coeff.copy()
 
-    #molecular orbitals
-    orbs = mo_coeff + 1j * np.zeros(mo_coeff.shape, dtype = float)
-
-    #Psi will always be the wavefunction
-    Psi = orbs[:, 0:ne]
-
-    #slight amount of noise helps optimization
-    Psi += np.random.randn(nso, ne) / 100
-    Psi += 1j * np.random.randn(nso, ne) / 100
+    #randomly mix occ-occ and virt-virt orbitals via a complex transformation, slight amount of noise helps optimization
+    randOccMat = randOrthoMat(ne)
+    randVirMat = randOrthoMat(nso - ne)
+    randU = lalg.block_diag(randOccMat, randVirMat)
+    orbs = orbs.dot(randU)
 
     #initial orbital rotation is the identity
     U0 = np.identity(nso, dtype = complex)
@@ -425,84 +378,63 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
 
     Eold = 100
     tol = 1.e-8
-    dt = 1.0
+    dt = 0.1
     doPrint = True
     calcStart = time.time()
-    amsgrad = AMSgrad(0.001, 0.1, 0.001, 2 * Psi.size)
-    for m in range(10):
+    for m in range(50):
         iterStart = time.time()
 
+        #initial orbital rotation
+        U = U0.copy()
+
         #energy
-        E = calcEnergy(S, H1, v2, Psi, Wg, Rg)
+        E = calcNonRedundantEnergy(S, H1, v2, ne, orbs, U, Wg, Rg)
 
         #gradient
-        J, J_bar = calcComplexGradient(S, H1, v2, Psi, Wg, Rg)
-        Jr, Ji = calcRealImaginary(J, J_bar)
-        print("jac")
+        Jr, Ji = calcNonRedundantGradient(S, H1, v2, ne, orbs, U, Wg, Rg)
         print(Jr)
         print(Ji)
-        Jrfd, Jifd = calcGradientFiniteDifference(S, H1, v2, Psi, Wg, Rg)
-        print("jac-fd")
-        print(Jrfd)
-        print(Jifd)
-
-        #nonredundant energy
-        U = U0
-        #E = calcNonRedundantEnergy(S, H1, v2, ne, orbs, U, Wg, Rg)
-
-        #gradient
-        #Jr, Ji = calcNonRedundantGradient(S, H1, v2, ne, orbs, U, Wg, Rg)
-        #print("nonredundant jac")
-        #print(Jr)
-        #print(Ji)
-        #Jfdr, Jfdi = calcNonRedundantGradientFiniteDifference(S, H1, v2, ne, orbs, U, Wg, Rg)
-        #print("nonredundant jac-fd")
-        #print(Jfdr)
-        #print(Jfdi)
-
-        timeEnergyGradient = time.time()
+        Jfdr, Jfdi = calcNonRedundantGradientFiniteDifference(S, H1, v2, ne, orbs, U, Wg, Rg)
+        print(Jfdr)
+        print(Jfdi)
 
         #total energy
         E0 = E + mol.energy_nuc()
 
-        #gradient and param vector
-        #J = Jr + 1j * Ji
-        J = np.concatenate((Jr, Ji), axis = 0).flatten()
-        params = np.concatenate((np.real(Psi), np.imag(Psi)), axis = 0).flatten()
+        #gradient
+        J = Jr + 1j * Ji
+        J_vec = J[ne:nso, 0:ne].flatten()
+        J_norm = lalg.norm(J_vec)
 
-        #J_vec = J
-        #J_norm = lalg.norm(J_vec)
+        timeEnergyGradient = time.time()
 
-        #evaluate update
         #gradient descent
-        delta = - dt * J
-
-        #amsgrad
-        #delta = amsgrad.update(J)
+        updateMat = - dt * J[ne:nso, 0:ne]
 
         #scipy optimizer
-        #params = complex_to_real(Psi).flatten()
+        paramsMat = np.zeros((nso - ne, ne), dtype = complex)
+        paramsVec = paramsMat.flatten()
+        params = complex_to_real(paramsVec)
 
-        #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'SLSQP', jac = jac, tol = tol)
-        #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'SLSQP', jac = jac)
-        #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'L-BFGS-B', jac = jac, tol = tol)
+        #params = params - dt * Jvec
+        print(fun(params, S, H1, v2, ne, orbs, Wg, Rg))
+        print(jac(params, S, H1, v2, ne, orbs, Wg, Rg))
 
         #sol = opt.minimize(fun, params, args = (S, H1, v2, ne, orbs, Wg, Rg), method = 'SLSQP', jac = jac, tol = tol)
+        #sol = opt.minimize(fun, params, args = (S, H1, v2, ne, orbs, Wg, Rg), method = 'SLSQP')
+        #sol = opt.minimize(fun, params, args = (S, H1, v2, ne, orbs, Wg, Rg), method = 'L-BFGS-B', jac = jac, tol = tol)
+
+        #updateVec = real_to_complex(sol.x)
+        #updateMat = updateVec.resize((nso - ne, ne))
+
+        #new rotation matrix
+        U[ne:nso, 0:ne] = updateMat
+        U[0:ne, ne:nso] = - updateMat.conj().T
 
         #update parameters
-        #if sol.success == True:
-        #    Psi = real_to_complex(sol.x).reshape((nso, ne))
-        #else:
-        #    Psi = Psi - dt * J
+        orbs = orbs.dot(U)
 
         timeOptimizer = time.time()
-
-        #new wavefunction parameters
-        params = params + delta
-        Psi = real_to_complex(params).reshape((nso, ne))
-
-        P = Psi.dot(Psi.conj().T).dot(S)
-        print(P.dot(P) - P)
 
         #update error
         error = abs(E - Eold)
@@ -515,7 +447,7 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
             print("Projected values")
             print(f"  Electronic Energy: {E}")
             print(f"  Total Energy: {E0}")
-            print(f"  Gradient Norm: {lalg.norm(J.flatten())}")
+            print(f"  Gradient Norm: {J_norm}")
             print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
 
             #print("Scipy Optimizer")
@@ -538,30 +470,8 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
         print(f"\nCalculation Complete")
         print(f"  Total Time: {time.time() - calcStart}")
         print(f"  Total Energy: {E0}")
-    return E0, Psi
+    return E0, orbs
 
-def readMat(filename, shape, iscomplex):
-   if(iscomplex):
-     matr = np.zeros(shape)
-     mati = np.zeros(shape)
-   else:
-     mat = np.zeros(shape)
-   row = 0
-   fileh = open(filename, 'r')
-   for line in fileh:
-     col = 0
-     for coeff in line.split():
-       if (iscomplex):
-         m = coeff.strip()[1:-1]
-         matr[row, col], mati[row, col] = [float(x) for x in m.split(',')]
-       else:
-         mat[row, col]  = float(coeff)
-       col = col + 1
-     row = row + 1
-   fileh.close()
-   if (iscomplex):
-     mat = matr + 1j * mati
-   return mat
 
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
@@ -603,10 +513,6 @@ fock = mf.get_hcore() + mf.get_veff()
 #print("\n")
 
 E0, mo = pGHF(mol, mf.mo_coeff)
-
-#mo_coeff = readMat("hf.txt", S.shape, True)
-#print(mo_coeff)
-#E0, mo = pGHF(mol, mo_coeff)
 
 #print("\n")
 #print("Final Result")

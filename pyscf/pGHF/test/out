@@ -1,3 +1,4 @@
+#INFO: **** input file is /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/test/pGHF.py ****
 from pyscf import gto, scf, tools
 import numpy as np
 import scipy.linalg as lalg
@@ -406,10 +407,10 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
     #initial orbital rotation is the identity
     U0 = np.identity(nso, dtype = complex)
 
-    #molecular orbitals
     orbs = mo_coeff + 1j * np.zeros(mo_coeff.shape, dtype = float)
 
     #Psi will always be the wavefunction
+    #Psi = mo_coeff[:, 0:ne] + 1j * np.zeros((nso, ne), dtype = float)
     Psi = orbs[:, 0:ne]
 
     #slight amount of noise helps optimization
@@ -429,7 +430,7 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
     doPrint = True
     calcStart = time.time()
     amsgrad = AMSgrad(0.001, 0.1, 0.001, 2 * Psi.size)
-    for m in range(10):
+    for m in range(1):
         iterStart = time.time()
 
         #energy
@@ -448,17 +449,17 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
 
         #nonredundant energy
         U = U0
-        #E = calcNonRedundantEnergy(S, H1, v2, ne, orbs, U, Wg, Rg)
+        E = calcNonRedundantEnergy(S, H1, v2, ne, orbs, U, Wg, Rg)
 
         #gradient
-        #Jr, Ji = calcNonRedundantGradient(S, H1, v2, ne, orbs, U, Wg, Rg)
-        #print("nonredundant jac")
-        #print(Jr)
-        #print(Ji)
-        #Jfdr, Jfdi = calcNonRedundantGradientFiniteDifference(S, H1, v2, ne, orbs, U, Wg, Rg)
-        #print("nonredundant jac-fd")
-        #print(Jfdr)
-        #print(Jfdi)
+        Jr, Ji = calcNonRedundantGradient(S, H1, v2, ne, orbs, U, Wg, Rg)
+        print("nonredundant jac")
+        print(Jr)
+        print(Ji)
+        Jfdr, Jfdi = calcNonRedundantGradientFiniteDifference(S, H1, v2, ne, orbs, U, Wg, Rg)
+        print("nonredundant jac-fd")
+        print(Jfdr)
+        print(Jfdi)
 
         timeEnergyGradient = time.time()
 
@@ -470,15 +471,15 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
         J = np.concatenate((Jr, Ji), axis = 0).flatten()
         params = np.concatenate((np.real(Psi), np.imag(Psi)), axis = 0).flatten()
 
-        #J_vec = J
-        #J_norm = lalg.norm(J_vec)
+        J_vec = J
+        J_norm = lalg.norm(J_vec)
 
         #evaluate update
         #gradient descent
-        delta = - dt * J
+        #delta = - dt * J
 
         #amsgrad
-        #delta = amsgrad.update(J)
+        delta = amsgrad.update(J)
 
         #scipy optimizer
         #params = complex_to_real(Psi).flatten()
@@ -497,12 +498,9 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
 
         timeOptimizer = time.time()
 
-        #new wavefunction parameters
+        #update parameters
         params = params + delta
         Psi = real_to_complex(params).reshape((nso, ne))
-
-        P = Psi.dot(Psi.conj().T).dot(S)
-        print(P.dot(P) - P)
 
         #update error
         error = abs(E - Eold)
@@ -515,7 +513,7 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
             print("Projected values")
             print(f"  Electronic Energy: {E}")
             print(f"  Total Energy: {E0}")
-            print(f"  Gradient Norm: {lalg.norm(J.flatten())}")
+            print(f"  Gradient Norm: {J_norm}")
             print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
 
             #print("Scipy Optimizer")
@@ -566,7 +564,7 @@ def readMat(filename, shape, iscomplex):
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
 
-N = 3
+N = 4
 a = 1.4
 
 atomstring = ""
@@ -583,7 +581,7 @@ mol.basis = 'sto-3g'
 #mol.basis = '631g'
 #mol.basis = 'ccpvdz'
 mol.verbose = 4
-mol.spin = 1
+mol.spin = 0
 mol.unit = 'bohr'
 mol.build()
 
@@ -614,3 +612,149 @@ E0, mo = pGHF(mol, mf.mo_coeff)
 #print(E0)
 #print("Molecular Orbitals")
 #print(mo)
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='ubuntu', release='5.4.0-56-generic', version='#62-Ubuntu SMP Mon Nov 23 19:20:19 UTC 2020', machine='x86_64', processor='x86_64')  Threads 3
+Python 3.8.3 (default, May 19 2020, 18:47:26) 
+[GCC 7.3.0]
+numpy 1.19.4  scipy 1.4.1
+Date: Tue Dec 15 13:16:49 2020
+PySCF version 1.7.5
+PySCF path  /home/iliya/miniconda3/lib/python3.8/site-packages/pyscf
+
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 4
+[INPUT] num. electrons = 4
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = bohr
+[INPUT]  1 H      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 H      0.000000000000   0.000000000000   0.740848095288 AA    0.000000000000   0.000000000000   1.400000000000 Bohr
+[INPUT]  3 H      0.000000000000   0.000000000000   1.481696190576 AA    0.000000000000   0.000000000000   2.800000000000 Bohr
+[INPUT]  4 H      0.000000000000   0.000000000000   2.222544285864 AA    0.000000000000   0.000000000000   4.200000000000 Bohr
+
+nuclear repulsion = 3.0952380952381
+number of shells = 4
+number of NR pGTOs = 12
+number of NR cGTOs = 4
+basis = sto-3g
+ecp = {}
+CPU time:         0.35
+
+
+******** <class 'pyscf.scf.ghf.GHF'> ********
+method = GHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 100
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/test/tmpgbb1trpx
+max_memory 4000 MB (current use 75 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -1.92632472521263
+  HOMO = -0.220048017741485  LUMO = 0.438704938292723
+cycle= 1 E= -2.09485112587744  delta_E= -0.169  |g|= 0.077  |ddm|= 1.02
+  HOMO = -0.426330592932125  LUMO = 0.483595479523032
+cycle= 2 E= -2.09828602569554  delta_E= -0.00343  |g|= 0.0107  |ddm|= 0.145
+  HOMO = -0.4250126452728  LUMO = 0.492115601443313
+cycle= 3 E= -2.09837574390097  delta_E= -8.97e-05  |g|= 0.0027  |ddm|= 0.0181
+  HOMO = -0.425977798017686  LUMO = 0.493056154712912
+cycle= 4 E= -2.09838224410299  delta_E= -6.5e-06  |g|= 0.000258  |ddm|= 0.00587
+  HOMO = -0.426047686347461  LUMO = 0.493060419669551
+cycle= 5 E= -2.09838238602208  delta_E= -1.42e-07  |g|= 7.16e-05  |ddm|= 0.00102
+  HOMO = -0.426047593780622  LUMO = 0.49307296532216
+cycle= 6 E= -2.09838240610435  delta_E= -2.01e-08  |g|= 5.34e-06  |ddm|= 0.000624
+  HOMO = -0.426050753139838  LUMO = 0.49306378106905
+cycle= 7 E= -2.09838240612941  delta_E= -2.51e-11  |g|= 6.57e-07  |ddm|= 1.23e-05
+  HOMO = -0.426050517059292  LUMO = 0.493065327262005
+Extra cycle  E= -2.09838240612975  delta_E= -3.38e-13  |g|= 1.6e-07  |ddm|= 8.55e-07
+converged SCF energy = -2.09838240612975  <S^2> = 2.9987124e-13  2S+1 = 1
+jac
+[[ 0.     -0.0004  0.0004 -0.0003]
+ [ 0.0017 -0.0018  0.0005 -0.0004]
+ [-0.0042  0.0044 -0.0017  0.0015]
+ [ 0.0042 -0.005   0.0019 -0.0018]
+ [ 0.011   0.0096  0.0007  0.0013]
+ [-0.0082 -0.007  -0.0019 -0.0023]
+ [-0.0055 -0.0047  0.0036  0.0037]
+ [ 0.0095  0.0081 -0.0034 -0.0033]]
+[[ 0.0004 -0.0002 -0.0003  0.0004]
+ [-0.0001  0.0001  0.0001 -0.0002]
+ [-0.0005  0.0003  0.0001 -0.0005]
+ [ 0.0007 -0.0005 -0.0003  0.0005]
+ [-0.0003 -0.0001  0.0002 -0.0004]
+ [-0.      0.0002 -0.0001  0.0001]
+ [ 0.0005 -0.0003 -0.0003  0.0006]
+ [-0.0002  0.0002  0.0003 -0.0011]]
+jac-fd
+[[ 0.     -0.0004  0.0004 -0.0003]
+ [ 0.0017 -0.0018  0.0005 -0.0004]
+ [-0.0042  0.0044 -0.0017  0.0015]
+ [ 0.0042 -0.005   0.0019 -0.0018]
+ [ 0.011   0.0096  0.0007  0.0013]
+ [-0.0082 -0.007  -0.0019 -0.0023]
+ [-0.0055 -0.0047  0.0036  0.0037]
+ [ 0.0095  0.0081 -0.0034 -0.0033]]
+[[ 0.0004 -0.0002 -0.0003  0.0004]
+ [-0.0001  0.0001  0.0001 -0.0002]
+ [-0.0005  0.0003  0.0001 -0.0005]
+ [ 0.0007 -0.0005 -0.0003  0.0005]
+ [-0.0003 -0.0001  0.0002 -0.0004]
+ [-0.      0.0002 -0.0001  0.0001]
+ [ 0.0005 -0.0003 -0.0003  0.0006]
+ [-0.0002  0.0002  0.0003 -0.0011]]
+nonredundant jac
+[[ 0.      0.      0.     -0.    ]
+ [-0.      0.      0.      0.    ]
+ [ 0.      0.      0.      0.    ]
+ [ 0.      0.     -0.      0.    ]
+ [-0.0121 -0.0193  0.0044 -0.0004]
+ [ 0.0252  0.015  -0.0011 -0.0037]
+ [-0.008  -0.0025 -0.0135 -0.0132]
+ [-0.0123  0.0151 -0.0026  0.0068]]
+[[-0.      0.     -0.      0.    ]
+ [ 0.     -0.      0.      0.    ]
+ [-0.      0.     -0.     -0.    ]
+ [ 0.      0.     -0.     -0.    ]
+ [ 0.0016 -0.0008 -0.001   0.0021]
+ [ 0.0003 -0.0004  0.0002 -0.0007]
+ [-0.0009  0.0011  0.0004 -0.0015]
+ [-0.0008  0.0003 -0.0002 -0.0003]]
+nonredundant jac-fd
+[[ 0.      0.      0.      0.    ]
+ [ 0.      0.      0.      0.    ]
+ [ 0.      0.      0.      0.    ]
+ [ 0.      0.      0.      0.    ]
+ [-0.0121 -0.0193  0.0044 -0.0004]
+ [ 0.0252  0.015  -0.0011 -0.0037]
+ [-0.008  -0.0025 -0.0135 -0.0132]
+ [-0.0123  0.0151 -0.0026  0.0068]]
+[[-0.      0.      0.      0.    ]
+ [ 0.     -0.      0.      0.    ]
+ [ 0.      0.     -0.      0.    ]
+ [ 0.      0.      0.     -0.    ]
+ [ 0.0016 -0.0008 -0.001   0.0021]
+ [ 0.0003 -0.0004  0.0002 -0.0007]
+ [-0.0009  0.0011  0.0004 -0.0015]
+ [-0.0008  0.0003 -0.0002 -0.0003]]
+-------------------------------- 0 --------------------------------
+Projected values
+  Electronic Energy: -5.193017091385647
+  Total Energy: -2.0977789961475515
+  Gradient Norm: 0.047836145151717226
+  Time for Energy and Gradient: 0.9173796940594912
+Error: 105.19301709138564
+
+Calculation Complete
+  Total Time: 0.918341993005015
+  Total Energy: -2.0977789961475515
