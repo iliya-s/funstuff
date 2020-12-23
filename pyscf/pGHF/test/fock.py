@@ -132,7 +132,7 @@ def calcFockMatrix(S, H1, v2, Phi, Wg, Rg):
     #separate occupied-virtual spaces
     P = dm.dot(S) #occ projector
     I = np.identity(P.shape[0], dtype = complex)
-    Q = I - P #unocc projector
+    Q = I - P #virt projector
     Fstandard = H1 + contractEri(v2, dm)
     F = F + P.conj().T.dot(Fstandard).dot(P) + Q.conj().T.dot(Fstandard).dot(Q)
     return F
@@ -408,14 +408,11 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
         if doPrint == True:
             print(f"-------------------------------- {m} --------------------------------")
 
-            print("Projected values")
             print(f"  Electronic Energy: {E}")
             print(f"  Total Energy: {E0}")
             print(f"  Gradient Norm: {lalg.norm(gradReal)}")
+            print(f"  Energy Error: {Eerror}")
             print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
-
-            print(f"Eerror: {Eerror}")
-            print(f"Gerror: {Gerror}")
 
         #check for convergence
         if Eerror < Etol or Gerror < Gtol:
