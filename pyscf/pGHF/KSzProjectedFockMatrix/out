@@ -1,3 +1,4 @@
+#INFO: **** input file is /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/test/fock.py ****
 from pyscf import gto, scf, tools
 import numpy as np
 import scipy.linalg as lalg
@@ -75,7 +76,33 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
     E = N / D
     return np.real(E)
 
-def calcFockMatrix(S, H1, v2, Phi, Wg, Rg):
+def calcEnergyFromDensity(S, H1, v2, Phi, dm, Wg, Rg):
+    #denominator and numerator of energy
+    D = 0.0
+    N = 0.0
+
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('xa,ab,bc,cd,d,de,ef,fy->xy', Phi.conj().T, S, dm, S, np.diag(Rg[i]), dm, S, Phi, dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #density matrix
+        tdm = np.einsum('x,xa,ab,bc,cd,de,ef,fy->xy', np.diag(Rg[i]), dm, S, Phi, invO, Phi.conj().T, S, dm, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        N += Wg[i] * detO * H
+
+    E = N / D
+    return np.real(E)
+
+def calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg):
     #deformed density matrix
     dm = Phi.dot(Phi.conj().T)
 
@@ -135,35 +162,9 @@ def calcFockMatrix(S, H1, v2, Phi, Wg, Rg):
     Q = I - P #virt projector
     Fstandard = H1 + contractEri(v2, dm)
     F = F + P.conj().T.dot(Fstandard).dot(P) + Q.conj().T.dot(Fstandard).dot(Q)
-    return F
+    return E, F
 
-def calcEnergyFromDensity(S, H1, v2, Phi, dm, Wg, Rg):
-    #denominator and numerator of energy
-    D = 0.0
-    N = 0.0
-
-    for i in range(len(Wg)):
-        #overlap quantities
-        O = np.einsum('xa,ab,bc,cd,d,de,ef,fy->xy', Phi.conj().T, S, dm, S, np.diag(Rg[i]), dm, S, Phi, dtype = complex, optimize = True)
-        invO = lalg.inv(O)
-        detO = lalg.det(O)
-
-        #density matrix
-        tdm = np.einsum('x,xa,ab,bc,cd,de,ef,fy->xy', np.diag(Rg[i]), dm, S, Phi, invO, Phi.conj().T, S, dm, dtype = complex, optimize = True)
-
-        #hamiltonian quantities
-        G1 = contractEri(v2, tdm)
-        F1 = H1 + 0.5 * G1
-        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
-
-        #averages with symmetry weights
-        D += Wg[i] * detO
-        N += Wg[i] * detO * H
-
-    E = N / D
-    return np.real(E)
-
-def calcFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg):
+def calcEnergyAndFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg):
     ds = 1.e-6
 
     dm = Phi.dot(Phi.conj().T)
@@ -187,7 +188,7 @@ def calcFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg):
 
             Fi[a, b] = (E - E0) / ds
 
-    return Fr + 1j * Fi
+    return E0, Fr + 1j * Fi
 
 def geig(A, B):
     w, v = lalg.eigh(B)
@@ -368,16 +369,17 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
         Phi = orbs[:, 0:ne]
 
         #energy
-        E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
-
-        #total energy
-        E0 = E + mol.energy_nuc()
+        #E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
 
         #fock matrix
-        F = calcFockMatrix(S, H1, v2, Phi, Wg, Rg)
+        E, F = calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg)
         Fmo = orbs.conj().T.dot(F).dot(orbs)
 
-        #F_fd = calcFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg)
+        #total energy
+        E = np.real(E)
+        E0 = E + mol.energy_nuc()
+
+        #E_fd, F_fd = calcEnergyAndFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg)
         #Fmo_fd = orbs.conj().T.dot(F_fd).dot(orbs)
 
         #gradient
@@ -498,3 +500,217 @@ E0, mo = pGHF(mol, mf.mo_coeff)
 #print(E0)
 #print("Molecular Orbitals")
 #print(mo)
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='ubuntu', release='5.4.0-58-generic', version='#64-Ubuntu SMP Wed Dec 9 08:16:25 UTC 2020', machine='x86_64', processor='x86_64')  Threads 3
+Python 3.8.3 (default, May 19 2020, 18:47:26) 
+[GCC 7.3.0]
+numpy 1.19.4  scipy 1.4.1
+Date: Wed Dec 23 16:33:45 2020
+PySCF version 1.7.5
+PySCF path  /home/iliya/miniconda3/lib/python3.8/site-packages/pyscf
+
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 3
+[INPUT] num. electrons = 3
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 1
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = bohr
+[INPUT]  1 H      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 H      0.000000000000   0.000000000000   0.740848095288 AA    0.000000000000   0.000000000000   1.400000000000 Bohr
+[INPUT]  3 H      0.000000000000   0.000000000000   1.481696190576 AA    0.000000000000   0.000000000000   2.800000000000 Bohr
+
+nuclear repulsion = 1.78571428571429
+number of shells = 3
+number of NR pGTOs = 9
+number of NR cGTOs = 3
+basis = sto-3g
+ecp = {}
+CPU time:         0.34
+
+
+******** <class 'pyscf.scf.ghf.GHF'> ********
+method = GHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 100
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/test/tmpqvrz674b
+max_memory 4000 MB (current use 76 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -1.34727861446339
+  HOMO = 0.0212526393142396  LUMO = 0.0690776102344628
+cycle= 1 E= -1.50112642580789  delta_E= -0.154  |g|= 0.097  |ddm|= 1.14
+  HOMO = -0.316925696698413  LUMO = 0.269345209739996
+cycle= 2 E= -1.50816554199055  delta_E= -0.00704  |g|= 0.0396  |ddm|= 0.121
+  HOMO = -0.329138486067049  LUMO = 0.288015181073775
+cycle= 3 E= -1.50955103193423  delta_E= -0.00139  |g|= 0.00197  |ddm|= 0.083
+  HOMO = -0.330460944971144  LUMO = 0.287846188485792
+cycle= 4 E= -1.50955690292365  delta_E= -5.87e-06  |g|= 0.000131  |ddm|= 0.00358
+  HOMO = -0.330526950494043  LUMO = 0.287837648767641
+cycle= 5 E= -1.50955827815913  delta_E= -1.38e-06  |g|= 1.87e-05  |ddm|= 0.000607
+  HOMO = -0.330492412102591  LUMO = 0.28784414356156
+cycle= 6 E= -1.50955804457051  delta_E= 2.34e-07  |g|= 2.66e-06  |ddm|= 6.57e-05
+  HOMO = -0.330492687766891  LUMO = 0.287842775878161
+cycle= 7 E= -1.50955789019698  delta_E= 1.54e-07  |g|= 3.16e-07  |ddm|= 1.09e-05
+  HOMO = -0.330492888634092  LUMO = 0.287842694232857
+cycle= 8 E= -1.50955787816737  delta_E= 1.2e-08  |g|= 1.29e-08  |ddm|= 1.17e-06
+  HOMO = -0.330492893789083  LUMO = 0.287842691454245
+cycle= 9 E= -1.50955787791037  delta_E= 2.57e-10  |g|= 6.93e-09  |ddm|= 1.6e-08
+  HOMO = -0.330492895617183  LUMO = 0.287842689768176
+Extra cycle  E= -1.50955787775886  delta_E= 1.52e-10  |g|= 2.72e-09  |ddm|= 1.02e-08
+converged SCF energy = -1.50955787775886  <S^2> = 0.76511223  2S+1 = 2.0150556
+[[-0.36 -0.59 -0.33 -0.19 -0.04  0.03]
+ [-0.59 -0.55 -0.59 -0.04 -0.   -0.04]
+ [-0.33 -0.59 -0.36  0.03 -0.04 -0.19]
+ [-0.19 -0.04  0.03 -0.34 -0.58 -0.33]
+ [-0.04 -0.   -0.04 -0.58 -0.55 -0.58]
+ [ 0.03 -0.04 -0.19 -0.33 -0.58 -0.34]]
+
+
+-------------------------------- 0 --------------------------------
+  Electronic Energy: -3.299669689192635
+  Total Energy: -1.5139554034783493
+  Gradient Norm: 0.09735598645101458
+  Energy Error: 103.29966968919264
+  Time for Energy and Gradient: 0.0362694460000057
+-------------------------------- 1 --------------------------------
+  Electronic Energy: -3.306168608016014
+  Total Energy: -1.5204543223017282
+  Gradient Norm: 0.03130271265818599
+  Energy Error: 0.00649891882337883
+  Time for Energy and Gradient: 0.03504376500040962
+-------------------------------- 2 --------------------------------
+  Electronic Energy: -3.3069249133005387
+  Total Energy: -1.521210627586253
+  Gradient Norm: 0.015317222942848478
+  Energy Error: 0.0007563052845247498
+  Time for Energy and Gradient: 0.03208010399976047
+-------------------------------- 3 --------------------------------
+  Electronic Energy: -3.3071585657831934
+  Total Energy: -1.5214442800689076
+  Gradient Norm: 0.012322291907834985
+  Energy Error: 0.0002336524826547226
+  Time for Energy and Gradient: 0.02842356800010748
+-------------------------------- 4 --------------------------------
+  Electronic Energy: -3.3073271923242675
+  Total Energy: -1.5216129066099817
+  Gradient Norm: 0.01180427649163014
+  Energy Error: 0.00016862654107407948
+  Time for Energy and Gradient: 0.028509619000033126
+-------------------------------- 5 --------------------------------
+  Electronic Energy: -3.3074848139013024
+  Total Energy: -1.5217705281870166
+  Gradient Norm: 0.011716616181744063
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.029057607000140706
+-------------------------------- 6 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.02993453699946258
+-------------------------------- 7 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.026247554999827116
+-------------------------------- 8 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.02650107899989962
+-------------------------------- 9 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.025743092999618966
+-------------------------------- 10 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.025784749000195006
+-------------------------------- 11 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.0026266168603363838
+  Time for Energy and Gradient: 0.02530756600026507
+-------------------------------- 12 --------------------------------
+  Electronic Energy: -3.312150102485618
+  Total Energy: -1.5264358167713323
+  Gradient Norm: 0.010583419525546166
+  Energy Error: 0.002038671723979313
+  Time for Energy and Gradient: 0.0254967860000761
+-------------------------------- 13 --------------------------------
+  Electronic Energy: -3.312230707565641
+  Total Energy: -1.5265164218513554
+  Gradient Norm: 0.0038908168519680058
+  Energy Error: 8.060508002305511e-05
+  Time for Energy and Gradient: 0.025147977000415267
+-------------------------------- 14 --------------------------------
+  Electronic Energy: -3.3122511790588294
+  Total Energy: -1.5265368933445436
+  Gradient Norm: 0.002614825834974552
+  Energy Error: 2.047149318817887e-05
+  Time for Energy and Gradient: 0.025171864999720128
+-------------------------------- 15 --------------------------------
+  Electronic Energy: -3.312279782443229
+  Total Energy: -1.5265654967289433
+  Gradient Norm: 0.002152515704855311
+  Energy Error: 2.8603384399694676e-05
+  Time for Energy and Gradient: 0.026220065999950748
+-------------------------------- 16 --------------------------------
+  Electronic Energy: -3.3123010973366234
+  Total Energy: -1.5265868116223376
+  Gradient Norm: 0.0018391256482121283
+  Energy Error: 2.1314893394297485e-05
+  Time for Energy and Gradient: 0.025743193000380415
+-------------------------------- 17 --------------------------------
+  Electronic Energy: -3.312314411456901
+  Total Energy: -1.5266001257426154
+  Gradient Norm: 0.0016240843999843812
+  Energy Error: 2.1314893394297485e-05
+  Time for Energy and Gradient: 0.025912941000569845
+-------------------------------- 18 --------------------------------
+  Electronic Energy: -3.312314411456901
+  Total Energy: -1.5266001257426154
+  Gradient Norm: 0.0016240843999843812
+  Energy Error: 1.3314120277829744e-05
+  Time for Energy and Gradient: 0.025757659999726457
+-------------------------------- 19 --------------------------------
+  Electronic Energy: -3.312340749203604
+  Total Energy: -1.526626463489318
+  Gradient Norm: 0.0010208546722377206
+  Energy Error: 2.633774670268707e-05
+  Time for Energy and Gradient: 0.02607438799986994
+-------------------------------- 20 --------------------------------
+  Electronic Energy: -3.312357309056427
+  Total Energy: -1.5266430233421413
+  Gradient Norm: 0.00024801552138668337
+  Energy Error: 1.6559852823228027e-05
+  Time for Energy and Gradient: 0.025813177000600263
+-------------------------------- 21 --------------------------------
+  Electronic Energy: -3.31235731022032
+  Total Energy: -1.5266430245060343
+  Gradient Norm: 0.00015240667504801337
+  Energy Error: 1.163892981992376e-09
+  Time for Energy and Gradient: 0.02582075200007239
+
+Calculation Complete
+  Total Time: 0.698402912000347
+  Total Energy: -1.5266430245060343

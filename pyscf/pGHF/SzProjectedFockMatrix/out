@@ -1,0 +1,716 @@
+#INFO: **** input file is /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/test/fock.py ****
+from pyscf import gto, scf, tools
+import numpy as np
+import scipy.linalg as lalg
+import scipy.optimize as opt
+import time
+import sys
+
+def contractEri(v2, tdm):
+    nso = tdm.shape[0]
+    nao = nso // 2
+
+    tdmaa = tdm[:nao, :nao]
+    tdmbb = tdm[nao:, nao:]
+    tdmab = tdm[:nao, nao:]
+    tdmba = tdm[nao:, :nao]
+
+    #the spin indices on the J, K matrices are from the contracted indices
+    Jaa = np.einsum('pqrs,sr->pq', v2, tdmaa, dtype = complex, optimize = True)
+
+    Jbb = np.einsum('pqrs,sr->pq', v2, tdmbb, dtype = complex, optimize = True)
+
+    Kaa = np.einsum('psrq,sr->pq', v2, tdmaa, dtype = complex, optimize = True)
+    Kbb = np.einsum('psrq,sr->pq', v2, tdmbb, dtype = complex, optimize = True)
+
+    Kab = np.einsum('psrq,sr->pq', v2, tdmba, dtype = complex, optimize = True)
+    Kba = np.einsum('psrq,sr->pq', v2, tdmab, dtype = complex, optimize = True)
+
+    G1 = np.zeros((nso, nso), dtype = complex)
+    G1[:nao, :nao] = Jaa + Jbb - Kaa
+    G1[nao:, nao:] = Jaa + Jbb - Kbb
+    G1[:nao, nao:] = - Kba
+    G1[nao:, :nao] = - Kab
+
+    return G1
+
+def calcSzSymmetryProjector(nso, sz, nGrid = 8):
+    nao = nso // 2
+    Wg = []
+    Rg = []
+    for p in range(nGrid):
+        theta = 2 * np.pi * p / nGrid
+
+        w = np.exp(- 1j * theta * sz) / nGrid
+        Wg.append(w)
+
+        r = lalg.block_diag(np.exp(1j * theta * 0.5) * np.identity(nao), np.exp(1j * theta * (- 0.5)) * np.identity(nao))
+        Rg.append(r)
+    return Wg, Rg
+
+def calcEnergy(S, H1, v2, Phi, Wg, Rg):
+    #denominator and numerator of energy
+    D = 0.0
+    N = 0.0
+
+    for i in range(len(Wg)):
+        Phig = Rg[i].dot(Phi)
+
+        #overlap quantities
+        O = Phi.conj().T.dot(S).dot(Phig)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #density matrix
+        tdm = Phig.dot(invO).dot(Phi.conj().T)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        N += Wg[i] * detO * H
+
+    E = N / D
+    return np.real(E)
+
+def calcEnergyFromDensity(S, H1, v2, Phi, dm, Wg, Rg):
+    #denominator and numerator of energy
+    D = 0.0
+    N = 0.0
+
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('xa,ab,bc,cd,d,de,ef,fy->xy', Phi.conj().T, S, dm, S, np.diag(Rg[i]), dm, S, Phi, dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #density matrix
+        tdm = np.einsum('x,xa,ab,bc,cd,de,ef,fy->xy', np.diag(Rg[i]), dm, S, Phi, invO, Phi.conj().T, S, dm, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        N += Wg[i] * detO * H
+
+    E = N / D
+    return np.real(E)
+
+def calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg):
+    #deformed density matrix
+    dm = Phi.dot(Phi.conj().T)
+
+    #denominator and numerator of energy
+    D = 0.0
+    N = 0.0
+    #gradient with respect to a,b element of deformed denisty matrix of the denominator and numerator of energy
+    Dab = np.zeros(S.shape, dtype = complex)
+    Nab = np.zeros(S.shape, dtype = complex)
+
+    for i in range(len(Wg)):
+        Phig = Rg[i].dot(Phi)
+
+        #overlap quantities
+        O = Phi.conj().T.dot(S).dot(Phig)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #derivative of detO with respect to a,b dm parameter
+        detOab  = detO * np.einsum('ab,bc,cm,nd,d,de,ef,fa->mn', invO, Phi.conj().T, S, S, np.diag(Rg[i]), dm, S, Phi, dtype = complex, optimize = True)
+        detOab += detO * np.einsum('ab,bc,cd,de,em,m,nf,fa->mn', invO, Phi.conj().T, S, dm, S, np.diag(Rg[i]), S, Phi, dtype = complex, optimize = True)
+
+        #transition density matrix
+        tdm = Phig.dot(invO).dot(Phi.conj().T)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #drivative of H with respect to a,b dm parameter
+        M1 = H1 + G1
+
+        X = np.einsum('ab,bc,cd,de,ef->af', S, Phi, invO, Phi.conj().T, S, dtype = complex, optimize = True)
+
+        A1 = np.einsum('na,ab,bm,m->mn', X, dm, M1, np.diag(Rg[i]))
+        A2 = np.einsum('na,a,ab,bm->mn', M1, np.diag(Rg[i]), dm, X)
+
+        B1 = - np.einsum('ab,b,bc,cm,nd,d,de,ef,fa->mn', M1, np.diag(Rg[i]), dm, X, S, np.diag(Rg[i]), dm, X, dm, dtype = complex, optimize = True)
+        B2 = - np.einsum('ab,b,bc,cd,de,em,m,nf,fa->mn', M1, np.diag(Rg[i]), dm, X, dm, S, np.diag(Rg[i]), X, dm, dtype = complex, optimize = True)
+
+        Hab = A1 + A2 + B1 + B2
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        Dab += Wg[i] * detOab
+
+        N += Wg[i] * detO * H
+        Nab += Wg[i] * (detOab * H + detO * Hab)
+
+    E = N / D
+    F = (Nab / D) - E * (Dab / D)
+
+    #separate occupied-virtual spaces
+    P = dm.dot(S) #occ projector
+    I = np.identity(P.shape[0], dtype = complex)
+    Q = I - P #virt projector
+    Fstandard = H1 + contractEri(v2, dm)
+    F = F + P.conj().T.dot(Fstandard).dot(P) + Q.conj().T.dot(Fstandard).dot(Q)
+    return E, F
+
+def calcEnergyAndFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg):
+    ds = 1.e-6
+
+    dm = Phi.dot(Phi.conj().T)
+    E0 = calcEnergyFromDensity(S, H1, v2, Phi, dm, Wg, Rg)
+
+    Fr = np.zeros(dm.shape, dtype = complex)
+    for a in range(dm.shape[0]):
+        for b in range(dm.shape[1]):
+            dm1 = dm.copy()
+            dm1[a, b] += ds
+            E = calcEnergyFromDensity(S, H1, v2, Phi, dm1, Wg, Rg)
+
+            Fr[a, b] = (E - E0) / ds
+
+    Fi = np.zeros(dm.shape, dtype = complex)
+    for a in range(dm.shape[0]):
+        for b in range(dm.shape[1]):
+            dm1 = dm.copy()
+            dm1[a, b] += 1j * ds
+            E = calcEnergyFromDensity(S, H1, v2, Phi, dm1, Wg, Rg)
+
+            Fi[a, b] = (E - E0) / ds
+
+    return E0, Fr + 1j * Fi
+
+def geig(A, B):
+    w, v = lalg.eigh(B)
+    idx = []
+    for i in range(w.size):
+        if abs(w[i]) > 1.e-8:
+            idx.append(i)
+    X = np.zeros((B.shape[0], len(idx)), dtype = complex)
+    for i in range(len(idx)):
+        X[:, i] = v[:, idx[i]] / np.sqrt(w[idx[i]])
+
+    Ap = X.conj().T.dot(A).dot(X)
+    Bp = X.conj().T.dot(B).dot(X)
+    w, v = lalg.eig(Ap)
+    v = X.dot(v)
+    return w, v
+
+def geigh(A, B):
+    w, v = lalg.eigh(B)
+    idx = []
+    for i in range(w.size):
+        if abs(w[i]) > 1.e-8:
+            idx.append(i)
+    X = np.zeros((B.shape[0], len(idx)), dtype = complex)
+    for i in range(len(idx)):
+        X[:, i] = v[:, idx[i]] / np.sqrt(w[idx[i]])
+
+    Ap = X.conj().T.dot(A).dot(X)
+    Bp = X.conj().T.dot(B).dot(X)
+    w, v = lalg.eigh(Ap)
+    v = X.dot(v)
+    return w, v
+
+def randOrthoMat(dim, S = None):
+    randMat = np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim)
+    randMat = randMat + randMat.conj().T
+    w, v = lalg.eigh(randMat, S)
+    return v
+
+def modifiedGramSchmidt(V, S = None):
+    if S is None:
+        S = np.identity(V.shape[0], dtype = V.dtype)
+    U = np.zeros(V.shape, dtype = V.dtype)
+    U[:, 0] = V[:, 0] / np.sqrt( V[:, 0].conj().T.dot(S).dot(V[:, 0]) )
+    for i in range(1, V.shape[1]):
+        U[:, i] = V[:, i]
+        for j in range(i):
+            U[:, i] = U[:, i] - ( U[:, j].conj().T.dot(S).dot(U[:, i]) ) / ( U[:, j].conj().T.dot(S).dot(U[:, j]) ) * U[:, j]
+        U[:, i] = U[:, i] / np.sqrt( U[:, i].conj().T.dot(S).dot(U[:, i]) )
+    return U
+
+class DIIS(object):
+    counter = 0 #diis does nothing for the first nVec iterations
+    nVec = 6
+
+    sizeVector = None
+    errorVectors = None
+
+    shapeObject = None
+    averagedObjects = None
+
+    def __init__(self, sizeVector, shapeObject, nVec = 6):
+        self.sizeVector = sizeVector
+        self.errorVectors = []
+
+        self.shapeObject = shapeObject
+        self.averagedObjects = []
+
+        self.nVec = nVec
+        for i in range(nVec):
+            errorVec = np.zeros((sizeVector, 1), dtype = complex)
+            self.errorVectors.append(errorVec)
+
+            averagedObject = np.zeros(shapeObject, dtype = complex)
+            self.averagedObjects.append(averagedObject)
+
+    def restart(self):
+        self.counter = 0
+
+    def update(self, errVec, avgObj):
+        self.counter += 1
+        self.errorVectors.pop(0)
+        self.errorVectors.append(errVec)
+        self.averagedObjects.pop(0)
+        self.averagedObjects.append(avgObj)
+
+        returnObj = np.zeros(self.shapeObject, dtype = complex)
+        if self.counter < self.nVec:
+            returnObj = avgObj
+        else:
+            b = np.zeros((self.nVec + 1, 1), dtype = complex)
+            b[self.nVec] = - 1.0
+
+            Bmat = np.zeros((self.nVec + 1, self.nVec + 1), dtype = complex)
+            for i in range(self.nVec):
+                Bmat[self.nVec, i] = - 1.0
+                Bmat[i, self.nVec] = - 1.0
+            for i in range(self.nVec):
+                for j in range(self.nVec):
+                    Bmat[i, j] = self.errorVectors[i].conj().T.dot(self.errorVectors[j])
+
+            #w  = lalg.solve(Bmat, b)
+            w = lalg.lstsq(Bmat, b)[0]
+
+            w = w[0:self.nVec]
+            for i in range(self.nVec):
+                returnObj += w[i] * self.averagedObjects[i]
+
+        return returnObj
+
+class AMSgrad(object):
+    stepsize = 0.001
+    decay1 = 0.1
+    decay2 = 0.001
+    mom1 = None
+    mom2 = None
+
+    def __init__(self, stepsize, decay1, decay2, nParams):
+        self.stepsize = stepsize
+        self.decay1 = decay1
+        self.decay2 = decay2
+        self.mom1 = np.zeros((nParams, 1), dtype = float)
+        self.mom2 = np.zeros((nParams, 1), dtype = float)
+
+    def update(self, gradient):
+        assert(gradient.shape[0] == self.mom1.shape[0])
+
+        delta = np.zeros(gradient.shape)
+        for i in range(gradient.shape[0]):
+            self.mom1[i] = self.decay1 * gradient[i] + (1.0 - self.decay1) * self.mom1[i]
+            self.mom2[i] = max(self.mom2[i], self.decay2 * gradient[i] * gradient[i] + (1.0 - self.decay2) * self.mom2[i])
+
+            delta[i] = - self.stepsize * self.mom1[i] / (np.sqrt(self.mom2[i]) + 1.e-8)
+
+        return delta
+
+def pGHF(mol, mo_coeff, ovlp_mat = None):
+    #basic molecule info and integrals
+    sz = float(mol.spin) / 2
+    ne = mol.nelectron
+    nao = mol.nao
+    nso = 2 * mol.nao
+    s = mol.intor('int1e_ovlp')
+    t = mol.intor('int1e_kin')
+    v1 = mol.intor('int1e_nuc')
+    v2 = mol.intor('int2e', aosym='s1')
+    assert(mo_coeff.shape[0] == nso)
+    assert(mo_coeff.shape[1] == nso)
+
+    #spin integrals
+    S = lalg.block_diag(s, s)
+    h1 = t + v1
+    H1 = lalg.block_diag(h1, h1)
+
+    #molecular orbitals
+    orbs = mo_coeff + 1j * np.zeros(mo_coeff.shape, dtype = float)
+
+    #mixes homo and lumo molecular orbitals to break complex conjugation symmetry
+    randOccVirMat = randOrthoMat(2)
+    randU = np.identity(nso, dtype = complex)
+    randU[(ne - 1):(ne + 1), (ne - 1):(ne + 1)] = randOccVirMat
+    #orbs = orbs.dot(randU)
+
+    #Sz symmetry projector
+    nGrid = 10
+    Wg, Rg = calcSzSymmetryProjector(nso, sz, nGrid)
+
+    Eold = 100
+    Etol = 1.e-8
+    Gtol = 1.e-6
+    doPrint = True
+    calcStart = time.time()
+    diis = DIIS(2 * (nso - ne) * ne, (nso, nso), 6)
+    for m in range(50):
+        iterStart = time.time()
+
+        #current wavefunction
+        Phi = orbs[:, 0:ne]
+
+        #energy
+        #E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
+
+        #fock matrix
+        E, F = calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg)
+        Fmo = orbs.conj().T.dot(F).dot(orbs)
+
+        #total energy
+        E = np.real(E)
+        E0 = E + mol.energy_nuc()
+
+        #E_fd, F_fd = calcEnergyAndFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg)
+        #Fmo_fd = orbs.conj().T.dot(F_fd).dot(orbs)
+
+        #gradient
+        grad = Fmo[0:ne, ne:nso].flatten()
+        gradReal = np.concatenate((np.real(grad), np.imag(grad)), axis = 0)
+
+        timeEnergyGradient = time.time()
+
+        #diis
+        F = diis.update(gradReal, F)
+
+        #diagonalize fock matrix
+        w, v = geigh(F, S)
+
+        #update orbitals if new orbitals lower the energy
+        Phip = v[:, 0:ne]
+        Ep = calcEnergy(S, H1, v2, Phip, Wg, Rg)
+        if Ep < E:
+            orbs = v
+
+            #update error
+            Eerror = abs(E - Eold)
+            Eold = E
+
+            Gerror = lalg.norm(gradReal)
+
+        #print
+        if doPrint == True:
+            print(f"-------------------------------- {m} --------------------------------")
+
+            print(f"  Electronic Energy: {E}")
+            print(f"  Total Energy: {E0}")
+            print(f"  Gradient Norm: {lalg.norm(gradReal)}")
+            print(f"  Energy Error: {Eerror}")
+            print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
+
+        #check for convergence
+        if Eerror < Etol or Gerror < Gtol:
+            break
+
+    if doPrint == True:
+        print(f"\nCalculation Complete")
+        print(f"  Total Time: {time.time() - calcStart}")
+        print(f"  Total Energy: {E0}")
+    return E0, orbs
+
+def readMat(filename, shape, iscomplex):
+   if(iscomplex):
+     matr = np.zeros(shape)
+     mati = np.zeros(shape)
+   else:
+     mat = np.zeros(shape)
+   row = 0
+   fileh = open(filename, 'r')
+   for line in fileh:
+     col = 0
+     for coeff in line.split():
+       if (iscomplex):
+         m = coeff.strip()[1:-1]
+         matr[row, col], mati[row, col] = [float(x) for x in m.split(',')]
+       else:
+         mat[row, col]  = float(coeff)
+       col = col + 1
+     row = row + 1
+   fileh.close()
+   if (iscomplex):
+     mat = matr + 1j * mati
+   return mat
+
+np.set_printoptions(precision=2)
+np.set_printoptions(suppress=True)
+
+N = 3
+a = 1.4
+
+atomstring = ""
+for i in range(N):
+    atomstring += f"H 0 0 {i * a};"
+
+mol = gto.Mole()
+mol.atom = atomstring
+#mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8;'
+#mol.atom = 'H 0 0 0; H 0 0 1.4'
+#mol.atom = 'H 0 0 0'
+#mol.atom = 'Li 0 0 0'
+mol.basis = 'sto-3g'
+#mol.basis = '631g'
+#mol.basis = 'ccpvdz'
+mol.verbose = 4
+mol.spin = 1
+mol.unit = 'bohr'
+mol.build()
+
+norb = mol.nao
+mf = scf.GHF(mol)
+dm = mf.get_init_guess()
+dm = dm + np.random.rand(2 * norb, 2 * norb) / 100
+mf.max_cycle = 100
+mf.kernel(dm0 = dm)
+
+S = mf.get_ovlp()
+occidx = mf.mo_occ > 0
+occOrb = mf.mo_coeff[:, occidx]
+#print(occOrb)
+fock = mf.get_hcore() + mf.get_veff()
+print(fock)
+print("\n")
+
+E0, mo = pGHF(mol, mf.mo_coeff)
+
+#mo_coeff = readMat("hf.txt", S.shape, True)
+#print(mo_coeff)
+#E0, mo = pGHF(mol, mo_coeff)
+
+#print("\n")
+#print("Final Result")
+#print("Energy")
+#print(E0)
+#print("Molecular Orbitals")
+#print(mo)
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='ubuntu', release='5.4.0-58-generic', version='#64-Ubuntu SMP Wed Dec 9 08:16:25 UTC 2020', machine='x86_64', processor='x86_64')  Threads 3
+Python 3.8.3 (default, May 19 2020, 18:47:26) 
+[GCC 7.3.0]
+numpy 1.19.4  scipy 1.4.1
+Date: Wed Dec 23 16:33:45 2020
+PySCF version 1.7.5
+PySCF path  /home/iliya/miniconda3/lib/python3.8/site-packages/pyscf
+
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 3
+[INPUT] num. electrons = 3
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 1
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = bohr
+[INPUT]  1 H      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 H      0.000000000000   0.000000000000   0.740848095288 AA    0.000000000000   0.000000000000   1.400000000000 Bohr
+[INPUT]  3 H      0.000000000000   0.000000000000   1.481696190576 AA    0.000000000000   0.000000000000   2.800000000000 Bohr
+
+nuclear repulsion = 1.78571428571429
+number of shells = 3
+number of NR pGTOs = 9
+number of NR cGTOs = 3
+basis = sto-3g
+ecp = {}
+CPU time:         0.34
+
+
+******** <class 'pyscf.scf.ghf.GHF'> ********
+method = GHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 100
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/test/tmpqvrz674b
+max_memory 4000 MB (current use 76 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -1.34727861446339
+  HOMO = 0.0212526393142396  LUMO = 0.0690776102344628
+cycle= 1 E= -1.50112642580789  delta_E= -0.154  |g|= 0.097  |ddm|= 1.14
+  HOMO = -0.316925696698413  LUMO = 0.269345209739996
+cycle= 2 E= -1.50816554199055  delta_E= -0.00704  |g|= 0.0396  |ddm|= 0.121
+  HOMO = -0.329138486067049  LUMO = 0.288015181073775
+cycle= 3 E= -1.50955103193423  delta_E= -0.00139  |g|= 0.00197  |ddm|= 0.083
+  HOMO = -0.330460944971144  LUMO = 0.287846188485792
+cycle= 4 E= -1.50955690292365  delta_E= -5.87e-06  |g|= 0.000131  |ddm|= 0.00358
+  HOMO = -0.330526950494043  LUMO = 0.287837648767641
+cycle= 5 E= -1.50955827815913  delta_E= -1.38e-06  |g|= 1.87e-05  |ddm|= 0.000607
+  HOMO = -0.330492412102591  LUMO = 0.28784414356156
+cycle= 6 E= -1.50955804457051  delta_E= 2.34e-07  |g|= 2.66e-06  |ddm|= 6.57e-05
+  HOMO = -0.330492687766891  LUMO = 0.287842775878161
+cycle= 7 E= -1.50955789019698  delta_E= 1.54e-07  |g|= 3.16e-07  |ddm|= 1.09e-05
+  HOMO = -0.330492888634092  LUMO = 0.287842694232857
+cycle= 8 E= -1.50955787816737  delta_E= 1.2e-08  |g|= 1.29e-08  |ddm|= 1.17e-06
+  HOMO = -0.330492893789083  LUMO = 0.287842691454245
+cycle= 9 E= -1.50955787791037  delta_E= 2.57e-10  |g|= 6.93e-09  |ddm|= 1.6e-08
+  HOMO = -0.330492895617183  LUMO = 0.287842689768176
+Extra cycle  E= -1.50955787775886  delta_E= 1.52e-10  |g|= 2.72e-09  |ddm|= 1.02e-08
+converged SCF energy = -1.50955787775886  <S^2> = 0.76511223  2S+1 = 2.0150556
+[[-0.36 -0.59 -0.33 -0.19 -0.04  0.03]
+ [-0.59 -0.55 -0.59 -0.04 -0.   -0.04]
+ [-0.33 -0.59 -0.36  0.03 -0.04 -0.19]
+ [-0.19 -0.04  0.03 -0.34 -0.58 -0.33]
+ [-0.04 -0.   -0.04 -0.58 -0.55 -0.58]
+ [ 0.03 -0.04 -0.19 -0.33 -0.58 -0.34]]
+
+
+-------------------------------- 0 --------------------------------
+  Electronic Energy: -3.299669689192635
+  Total Energy: -1.5139554034783493
+  Gradient Norm: 0.09735598645101458
+  Energy Error: 103.29966968919264
+  Time for Energy and Gradient: 0.0362694460000057
+-------------------------------- 1 --------------------------------
+  Electronic Energy: -3.306168608016014
+  Total Energy: -1.5204543223017282
+  Gradient Norm: 0.03130271265818599
+  Energy Error: 0.00649891882337883
+  Time for Energy and Gradient: 0.03504376500040962
+-------------------------------- 2 --------------------------------
+  Electronic Energy: -3.3069249133005387
+  Total Energy: -1.521210627586253
+  Gradient Norm: 0.015317222942848478
+  Energy Error: 0.0007563052845247498
+  Time for Energy and Gradient: 0.03208010399976047
+-------------------------------- 3 --------------------------------
+  Electronic Energy: -3.3071585657831934
+  Total Energy: -1.5214442800689076
+  Gradient Norm: 0.012322291907834985
+  Energy Error: 0.0002336524826547226
+  Time for Energy and Gradient: 0.02842356800010748
+-------------------------------- 4 --------------------------------
+  Electronic Energy: -3.3073271923242675
+  Total Energy: -1.5216129066099817
+  Gradient Norm: 0.01180427649163014
+  Energy Error: 0.00016862654107407948
+  Time for Energy and Gradient: 0.028509619000033126
+-------------------------------- 5 --------------------------------
+  Electronic Energy: -3.3074848139013024
+  Total Energy: -1.5217705281870166
+  Gradient Norm: 0.011716616181744063
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.029057607000140706
+-------------------------------- 6 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.02993453699946258
+-------------------------------- 7 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.026247554999827116
+-------------------------------- 8 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.02650107899989962
+-------------------------------- 9 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.025743092999618966
+-------------------------------- 10 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.00015762157703491653
+  Time for Energy and Gradient: 0.025784749000195006
+-------------------------------- 11 --------------------------------
+  Electronic Energy: -3.310111430761639
+  Total Energy: -1.524397145047353
+  Gradient Norm: 0.05570515027856286
+  Energy Error: 0.0026266168603363838
+  Time for Energy and Gradient: 0.02530756600026507
+-------------------------------- 12 --------------------------------
+  Electronic Energy: -3.312150102485618
+  Total Energy: -1.5264358167713323
+  Gradient Norm: 0.010583419525546166
+  Energy Error: 0.002038671723979313
+  Time for Energy and Gradient: 0.0254967860000761
+-------------------------------- 13 --------------------------------
+  Electronic Energy: -3.312230707565641
+  Total Energy: -1.5265164218513554
+  Gradient Norm: 0.0038908168519680058
+  Energy Error: 8.060508002305511e-05
+  Time for Energy and Gradient: 0.025147977000415267
+-------------------------------- 14 --------------------------------
+  Electronic Energy: -3.3122511790588294
+  Total Energy: -1.5265368933445436
+  Gradient Norm: 0.002614825834974552
+  Energy Error: 2.047149318817887e-05
+  Time for Energy and Gradient: 0.025171864999720128
+-------------------------------- 15 --------------------------------
+  Electronic Energy: -3.312279782443229
+  Total Energy: -1.5265654967289433
+  Gradient Norm: 0.002152515704855311
+  Energy Error: 2.8603384399694676e-05
+  Time for Energy and Gradient: 0.026220065999950748
+-------------------------------- 16 --------------------------------
+  Electronic Energy: -3.3123010973366234
+  Total Energy: -1.5265868116223376
+  Gradient Norm: 0.0018391256482121283
+  Energy Error: 2.1314893394297485e-05
+  Time for Energy and Gradient: 0.025743193000380415
+-------------------------------- 17 --------------------------------
+  Electronic Energy: -3.312314411456901
+  Total Energy: -1.5266001257426154
+  Gradient Norm: 0.0016240843999843812
+  Energy Error: 2.1314893394297485e-05
+  Time for Energy and Gradient: 0.025912941000569845
+-------------------------------- 18 --------------------------------
+  Electronic Energy: -3.312314411456901
+  Total Energy: -1.5266001257426154
+  Gradient Norm: 0.0016240843999843812
+  Energy Error: 1.3314120277829744e-05
+  Time for Energy and Gradient: 0.025757659999726457
+-------------------------------- 19 --------------------------------
+  Electronic Energy: -3.312340749203604
+  Total Energy: -1.526626463489318
+  Gradient Norm: 0.0010208546722377206
+  Energy Error: 2.633774670268707e-05
+  Time for Energy and Gradient: 0.02607438799986994
+-------------------------------- 20 --------------------------------
+  Electronic Energy: -3.312357309056427
+  Total Energy: -1.5266430233421413
+  Gradient Norm: 0.00024801552138668337
+  Energy Error: 1.6559852823228027e-05
+  Time for Energy and Gradient: 0.025813177000600263
+-------------------------------- 21 --------------------------------
+  Electronic Energy: -3.31235731022032
+  Total Energy: -1.5266430245060343
+  Gradient Norm: 0.00015240667504801337
+  Energy Error: 1.163892981992376e-09
+  Time for Energy and Gradient: 0.02582075200007239
+
+Calculation Complete
+  Total Time: 0.698402912000347
+  Total Energy: -1.5266430245060343
