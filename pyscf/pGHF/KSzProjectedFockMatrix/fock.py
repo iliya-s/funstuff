@@ -72,6 +72,26 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
         D += Wg[i] * detO
         N += Wg[i] * detO * H
 
+    for i in range(len(Wg)):
+        Phig = Rg[i].dot(Phi.conj())
+
+        #overlap quantities
+        O = Phi.conj().T.dot(S).dot(Phig)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #density matrix
+        tdm = Phig.dot(invO).dot(Phi.conj().T)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        N += Wg[i] * detO * H
+
     E = N / D
     return np.real(E)
 
@@ -86,7 +106,7 @@ def calcEnergyFromDensity(S, H1, v2, Phi, dm, Wg, Rg):
         invO = lalg.inv(O)
         detO = lalg.det(O)
 
-        #density matrix
+        #transition density matrix
         tdm = np.einsum('x,xa,ab,bc,cd,de,ef,fy->xy', np.diag(Rg[i]), dm, S, Phi, invO, Phi.conj().T, S, dm, dtype = complex, optimize = True)
 
         #hamiltonian quantities
@@ -98,6 +118,24 @@ def calcEnergyFromDensity(S, H1, v2, Phi, dm, Wg, Rg):
         D += Wg[i] * detO
         N += Wg[i] * detO * H
 
+    for i in range(len(Wg)):
+        #overlap quantities
+        Op = np.einsum('xa,ab,bc,cd,d,de,ef,fy->xy', Phi.conj().T, S, dm, S, np.diag(Rg[i]), dm.conj(), S, Phi.conj(), dtype = complex, optimize = True)
+        invOp = lalg.inv(Op)
+        detOp = lalg.det(Op)
+
+        #transition density matrix
+        tdm = np.einsum('x,xa,ab,bc,cd,de,ef,fy->xy', np.diag(Rg[i]), dm.conj(), S, Phi.conj(), invOp, Phi.conj().T, S, dm, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detOp
+        N += Wg[i] * detOp * H
+
     E = N / D
     return np.real(E)
 
@@ -108,15 +146,14 @@ def calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg):
     #denominator and numerator of energy
     D = 0.0
     N = 0.0
+
     #gradient with respect to a,b element of deformed denisty matrix of the denominator and numerator of energy
     Dab = np.zeros(S.shape, dtype = complex)
     Nab = np.zeros(S.shape, dtype = complex)
 
     for i in range(len(Wg)):
-        Phig = Rg[i].dot(Phi)
-
         #overlap quantities
-        O = Phi.conj().T.dot(S).dot(Phig)
+        O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi, dtype = complex, optimize = True)
         invO = lalg.inv(O)
         detO = lalg.det(O)
 
@@ -125,7 +162,7 @@ def calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg):
         detOab += detO * np.einsum('ab,bc,cd,de,em,m,nf,fa->mn', invO, Phi.conj().T, S, dm, S, np.diag(Rg[i]), S, Phi, dtype = complex, optimize = True)
 
         #transition density matrix
-        tdm = Phig.dot(invO).dot(Phi.conj().T)
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi, invO, Phi.conj().T, dtype = complex, optimize = True)
 
         #hamiltonian quantities
         G1 = contractEri(v2, tdm)
@@ -152,15 +189,71 @@ def calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg):
         N += Wg[i] * detO * H
         Nab += Wg[i] * (detOab * H + detO * Hab)
 
+    #gradient with respect to a,b and a,b* element of deformed denisty matrix of the denominator and numerator of energy
+    #Dab_ = np.zeros(S.shape, dtype = complex)
+    #Nab_ = np.zeros(S.shape, dtype = complex)
+    #Dab_bar = np.zeros(S.shape, dtype = complex)
+    #Nab_bar = np.zeros(S.shape, dtype = complex)
+
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi.conj(), dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+    #    #derivative of detO with respect to a,b dm parameter
+    #    #detOab_ = detO * np.einsum('ab,bc,cm,nd,d,de,ef,fa->mn', invO, Phi.conj().T, S, S, np.diag(Rg[i]), dm.conj(), S, Phi.conj(), dtype = complex, optimize = True)
+    #    #detOab_bar = detO * np.einsum('ab,bc,cd,de,em,m,nf,fa->mn', invO, Phi.conj().T, S, dm, S, np.diag(Rg[i]), S, Phi.conj(), dtype = complex, optimize = True)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi.conj(), invO, Phi.conj().T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+    #    #drivative of H with respect to a,b dm parameter
+    #    M1 = H1 + G1
+
+    #    X = np.einsum('ab,bc,cd,de,ef->af', S, Phi.conj(), invO, Phi.conj().T, S, dtype = complex, optimize = True)
+
+    #    #A_ = np.einsum('na,a,ab,bm->mn', M1, np.diag(Rg[i]), dm.conj(), X, dtype = complex, optimize = True)
+    #    #B_ = - np.einsum('ab,b,bc,cm,nd,d,de,ef,fa->mn', M1, np.diag(Rg[i]), dm.conj(), X, S, np.diag(Rg[i]), dm.conj(), X, dm, dtype = complex, optimize = True)
+
+    #    #A_bar = np.einsum('na,ab,bm,m->mn', X, dm, M1, np.diag(Rg[i]))
+    #    #B_bar = - np.einsum('ab,b,bc,cd,de,em,m,nf,fa->mn', M1, np.diag(Rg[i]), dm.conj(), X, dm, S, np.diag(Rg[i]), X, dm, dtype = complex, optimize = True)
+
+    #    #Hab_ = A_ + B_
+    #    #Hab_bar = A_bar + B_bar
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+    #    #Dab_ += Wg[i] * detOab_
+    #    #Dab_bar += Wg[i] * detOab_bar
+
+        N += Wg[i] * detO * H
+    #    #Nab_ += Wg[i] * (detOab_ * H + detO * Hab_)
+    #    #Nab_bar += Wg[i] * (detOab_bar * H + detO * Hab_bar)
+
+    #Nab_r = Nab_ + Nab_bar
+    #Nab_i = 1j * (Nab_ - Nab_bar)
+
+    #Dab_r = Dab_ + Dab_bar
+    #Dab_i = 1j * (Dab_ - Dab_bar)
+
+    #Nab += Nab_r + 1j * Nab_i
+    #Dab += Dab_r + 1j * Dab_i
+
     E = N / D
     F = (Nab / D) - E * (Dab / D)
 
     #separate occupied-virtual spaces
-    P = dm.dot(S) #occ projector
-    I = np.identity(P.shape[0], dtype = complex)
-    Q = I - P #virt projector
-    Fstandard = H1 + contractEri(v2, dm)
-    F = F + P.conj().T.dot(Fstandard).dot(P) + Q.conj().T.dot(Fstandard).dot(Q)
+    #P = dm.dot(S) #occ projector
+    #I = np.identity(P.shape[0], dtype = complex)
+    #Q = I - P #virt projector
+    #Fstandard = H1 + contractEri(v2, dm)
+    #F = F + P.conj().T.dot(Fstandard).dot(P) + Q.conj().T.dot(Fstandard).dot(Q)
     return E, F
 
 def calcEnergyAndFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg):
@@ -358,27 +451,37 @@ def pGHF(mol, mo_coeff, ovlp_mat = None):
     Eold = 100
     Etol = 1.e-8
     Gtol = 1.e-6
+    Eerror = 100
+    Gerror = 100
     doPrint = True
     calcStart = time.time()
     diis = DIIS(2 * (nso - ne) * ne, (nso, nso), 6)
-    for m in range(50):
+    for m in range(1):
         iterStart = time.time()
 
         #current wavefunction
         Phi = orbs[:, 0:ne]
 
         #energy
-        #E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
+        E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
+        print("calc energy")
+        print(E + mol.energy_nuc())
 
         #fock matrix
         E, F = calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg)
+        print("calc energy and fock matrix")
+        print(E + mol.energy_nuc())
+        print(F)
         Fmo = orbs.conj().T.dot(F).dot(orbs)
 
         #total energy
         E = np.real(E)
         E0 = E + mol.energy_nuc()
 
-        #E_fd, F_fd = calcEnergyAndFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg)
+        E_fd, F_fd = calcEnergyAndFockMatrixFiniteDifference(S, H1, v2, Phi, Wg, Rg)
+        print("calc energy and fock matrix fin-diff")
+        print(E_fd + mol.energy_nuc())
+        print(F_fd)
         #Fmo_fd = orbs.conj().T.dot(F_fd).dot(orbs)
 
         #gradient
@@ -449,9 +552,9 @@ def readMat(filename, shape, iscomplex):
    return mat
 
 np.set_printoptions(precision=2)
-np.set_printoptions(suppress=True)
+np.set_printoptions(suppress=False)
 
-N = 3
+N = 4
 a = 1.4
 
 atomstring = ""
@@ -468,7 +571,7 @@ mol.basis = 'sto-3g'
 #mol.basis = '631g'
 #mol.basis = 'ccpvdz'
 mol.verbose = 4
-mol.spin = 1
+mol.spin = 0
 mol.unit = 'bohr'
 mol.build()
 
@@ -484,14 +587,16 @@ occidx = mf.mo_occ > 0
 occOrb = mf.mo_coeff[:, occidx]
 #print(occOrb)
 fock = mf.get_hcore() + mf.get_veff()
-print(fock)
-print("\n")
+#print(fock)
 
+print("\ninitial solution")
+#print(mf.mo_coeff)
 E0, mo = pGHF(mol, mf.mo_coeff)
 
-#mo_coeff = readMat("hf.txt", S.shape, True)
+print("\nkszghf solution")
+mo_coeff = readMat("hf.txt", S.shape, True)
 #print(mo_coeff)
-#E0, mo = pGHF(mol, mo_coeff)
+E0, mo = pGHF(mol, mo_coeff)
 
 #print("\n")
 #print("Final Result")

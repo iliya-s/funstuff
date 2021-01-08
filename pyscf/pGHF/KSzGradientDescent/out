@@ -1,0 +1,958 @@
+#INFO: **** input file is /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/KSzGradientDescent/grad.py ****
+from pyscf import gto, scf, tools
+import numpy as np
+import scipy.linalg as lalg
+import scipy.optimize as opt
+import time
+import sys
+
+def contractEri(v2, tdm):
+    nso = tdm.shape[0]
+    nao = nso // 2
+
+    tdmaa = tdm[:nao, :nao]
+    tdmbb = tdm[nao:, nao:]
+    tdmab = tdm[:nao, nao:]
+    tdmba = tdm[nao:, :nao]
+
+    #the spin indices on the J, K matrices are from the contracted indices
+    Jaa = np.einsum('pqrs,sr->pq', v2, tdmaa, dtype = complex, optimize = True)
+
+    Jbb = np.einsum('pqrs,sr->pq', v2, tdmbb, dtype = complex, optimize = True)
+
+    Kaa = np.einsum('psrq,sr->pq', v2, tdmaa, dtype = complex, optimize = True)
+    Kbb = np.einsum('psrq,sr->pq', v2, tdmbb, dtype = complex, optimize = True)
+
+    Kab = np.einsum('psrq,sr->pq', v2, tdmba, dtype = complex, optimize = True)
+    Kba = np.einsum('psrq,sr->pq', v2, tdmab, dtype = complex, optimize = True)
+
+    G1 = np.zeros((nso, nso), dtype = complex)
+    G1[:nao, :nao] = Jaa + Jbb - Kaa
+    G1[nao:, nao:] = Jaa + Jbb - Kbb
+    G1[:nao, nao:] = - Kba
+    G1[nao:, :nao] = - Kab
+
+    return G1
+
+def calcSzSymmetryProjector(nso, sz, nGrid = 8):
+    nao = nso // 2
+    Wg = []
+    Rg = []
+    for p in range(nGrid):
+        theta = 2 * np.pi * p / nGrid
+
+        w = np.exp(- 1j * theta * sz) / nGrid
+        Wg.append(w)
+
+        r = lalg.block_diag(np.exp(1j * theta * 0.5) * np.identity(nao), np.exp(1j * theta * (- 0.5)) * np.identity(nao))
+        Rg.append(r)
+    return Wg, Rg
+
+def calcEnergy(S, H1, v2, Phi, Wg, Rg):
+    #denominator and numerator of energy
+    D = 0.0
+    N = 0.0
+
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi, dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi, invO, Phi.conj().T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        N += Wg[i] * detO * H
+
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi.conj(), dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi.conj(), invO, Phi.conj().T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        N += Wg[i] * detO * H
+
+    E = N / D
+    return np.real(E)
+
+def calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg):
+    #denominator and numerator of energy
+    D = 0.0
+    N = 0.0
+
+    #gradient with respect to m,n orbital parameter of the denominator and numerator of energy
+    Dmn = np.zeros(Phi.shape, dtype = complex)
+    Nmn = np.zeros(Phi.shape, dtype = complex)
+    #gradient with respect to m,n* orbital parameter of the denominator and numerator of energy
+    Dmn_bar = np.zeros(Phi.shape, dtype = complex)
+    Nmn_bar = np.zeros(Phi.shape, dtype = complex)
+
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi, dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #derivative of detO with respect to m,n orbital parameter
+        detOmn = detO * np.einsum('na,ab,bm,m->mn', invO, Phi.conj().T, S, np.diag(Rg[i]), dtype = complex, optimize = True)
+        detOmn_bar = detO * np.einsum('ma,a,ab,bn->mn', S, np.diag(Rg[i]), Phi, invO, dtype = complex, optimize = True)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi, invO, Phi.conj().T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #drivative of H with respect to m,n orbital parameter
+        M1 = H1 + G1
+
+        Amn = np.einsum('na,ab,bm,m->mn', invO, Phi.conj().T, M1, np.diag(Rg[i]), dtype = complex, optimize = True)
+        Bmn = np.einsum('na,ab,bc,c,cd,de,ef,fm,m->mn', invO, Phi.conj().T, M1, np.diag(Rg[i]), Phi, invO, Phi.conj().T, S, np.diag(Rg[i]), dtype = complex, optimize = True)
+        Hmn = Amn - Bmn
+
+        Amn_bar = np.einsum('ma,a,ab,bn->mn', M1, np.diag(Rg[i]), Phi, invO, dtype = complex, optimize = True)
+        Bmn_bar = np.einsum('ma,a,ab,bc,cd,de,e,ef,fn->mn', S, np.diag(Rg[i]), Phi, invO, Phi.conj().T, M1, np.diag(Rg[i]), Phi, invO, dtype = complex, optimize = True)
+        Hmn_bar = Amn_bar - Bmn_bar
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        Dmn += Wg[i] * detOmn
+        Dmn_bar += Wg[i] * detOmn_bar
+
+        N += Wg[i] * detO * H
+        Nmn += Wg[i] * (detOmn * H + detO * Hmn)
+        Nmn_bar += Wg[i] * (detOmn_bar * H + detO * Hmn_bar)
+
+    #for complex conjugation projection, calculate overlaps with the conjugate of the ket, note that the only nonzero derivatives are with respect to m,n* parameters
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi.conj(), dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #derivative of detO with respect to m,n orbital parameter
+        detOmn_bar = detO * np.einsum('na,ab,bm,m->mn', invO, Phi.conj().T, S, np.diag(Rg[i]), dtype = complex, optimize = True)
+        detOmn_bar += detO * np.einsum('ma,a,ab,bn->mn', S, np.diag(Rg[i]), Phi.conj(), invO, dtype = complex, optimize = True)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi.conj(), invO, Phi.conj().T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #drivative of H with respect to m,n orbital parameter
+        M1 = H1 + G1
+
+        Amn1_bar = np.einsum('na,ab,bm,m->mn', invO, Phi.conj().T, M1, np.diag(Rg[i]), dtype = complex, optimize = True)
+        Amn2_bar = np.einsum('ma,a,ab,bn->mn', M1, np.diag(Rg[i]), Phi.conj(), invO, dtype = complex, optimize = True)
+
+        Bmn1_bar = np.einsum('na,ab,bc,c,cd,de,ef,fm,m->mn', invO, Phi.conj().T, M1, np.diag(Rg[i]), Phi.conj(), invO, Phi.conj().T, S, np.diag(Rg[i]), dtype = complex, optimize = True)
+        Bmn2_bar = np.einsum('ma,a,ab,bc,cd,de,e,ef,fn->mn', S, np.diag(Rg[i]), Phi.conj(), invO, Phi.conj().T, M1, np.diag(Rg[i]), Phi.conj(), invO, dtype = complex, optimize = True)
+
+        Hmn_bar = Amn1_bar + Amn2_bar - Bmn1_bar - Bmn2_bar
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        Dmn_bar += Wg[i] * detOmn_bar
+
+        N += Wg[i] * detO * H
+        Nmn_bar += Wg[i] * (detOmn_bar * H + detO * Hmn_bar)
+
+    E = N / D
+    J = Nmn / D - E * (Dmn / D)
+    J_bar = Nmn_bar / D - E * (Dmn_bar / D)
+
+    Jr = np.real(J + J_bar)
+    Ji = np.real(1j * (J - J_bar))
+
+    #return E, np.concatenate((np.real(Jr), np.real(Ji)), axis = 0)
+    J_vec = np.concatenate((Jr.flatten(), Ji.flatten()), axis = 0)
+    return E, J_vec
+
+def calcEnergyAndGradientFiniteDifference(S, H1, v2, Phi, Wg, Rg):
+    ds = 1.e-6
+    E0 = calcEnergy(S, H1, v2, Phi, Wg, Rg)
+
+    Jr = np.zeros(Phi.shape, dtype = float)
+    for a in range(Phi.shape[0]):
+        for b in range(Phi.shape[1]):
+            Ket = Phi.copy()
+            Ket[a, b] += ds
+            E = calcEnergy(S, H1, v2, Ket, Wg, Rg)
+
+            Jr[a, b] = (E - E0) / ds
+
+    Ji = np.zeros(Phi.shape, dtype = float)
+    for a in range(Phi.shape[0]):
+        for b in range(Phi.shape[1]):
+            Ket = Phi.copy()
+            Ket[a, b] += 1j * ds
+            E = calcEnergy(S, H1, v2, Ket, Wg, Rg)
+
+            Ji[a, b] = (E - E0) / ds
+
+    #return E0, np.concatenate((Jr, Ji), axis = 0)
+    J_vec = np.concatenate((Jr.flatten(), Ji.flatten()), axis = 0)
+    return E, J_vec
+
+#this takes a vector of 2N^2 and turns it into a complex matrix of dimension N
+def vec_to_matrix(vec):
+    vecr = vec[:len(vec)//2]
+    veci = vec[len(vec)//2:]
+    N = np.sqrt(len(vecr))
+    mat = np.zeros((N, N))
+    for m in range(N):
+        for n in range(N):
+            mat[m, n] = mat[m, n]
+    return mat
+
+#this takes a complex matrix of dimension N and turns it into a complex vector of 2N^2
+def matrix_to_vec(mat):
+    matr = np.real(mat)
+    mati = np.imag(mat)
+    return np.concatenate((matr.flatten(), mati.flatten()), axis = 0)
+
+#the following four functions are helpers to use scipy's optimization library
+
+def real_to_complex(z): #real vector of length 2n -> complex of length n
+    return z[:len(z)//2] + 1j * z[len(z)//2:]
+
+def complex_to_real(z): #complex vector of length n -> real of length 2n
+    return np.concatenate((np.real(z), np.imag(z)))
+
+def fun(params, nelectron, S, H1, v2, Wg, Rg):
+    paramVec = real_to_complex(params)
+    #wavefunction
+    nso = S.shape[0]
+    Phi = paramVec.reshape((nso, nelectron))
+    return calcEnergy(S, H1, v2, Phi, Wg, Rg)
+
+def jac(params, nelectron, S, H1, v2, Wg, Rg):
+    paramVec = real_to_complex(params)
+    #wavefunction
+    nso = S.shape[0]
+    Phi = paramVec.reshape((nso, nelectron))
+    J = calcGradient(S, H1, v2, Phi, Wg, Rg)
+    return J.flatten()
+
+class DIIS(object):
+    counter = 0 #diis does sgd for the first nVec iterations
+    nVec = 6
+
+    sizeVector = None
+    errorVectors = None
+
+    shapeObject = None
+    averagedObjects = None
+
+    def __init__(self, sizeVector, shapeObject, nVec = 6):
+        self.sizeVector = sizeVector
+        self.errorVectors = []
+
+        self.shapeObject = shapeObject
+        self.averagedObjects = []
+
+        self.nVec = nVec
+        for i in range(nVec):
+            errorVec = np.zeros((sizeVector, 1), dtype = float)
+            self.errorVectors.append(errorVec)
+
+            averagedObject = np.zeros(shapeObject, dtype = float)
+            self.averagedObjects.append(averagedObject)
+
+    def restart(self):
+        self.counter = 0
+
+    def update(self, errVec, avgObj):
+        self.counter += 1
+        self.errorVectors.pop(0)
+        self.errorVectors.append(errVec)
+        self.averagedObjects.pop(0)
+        self.averagedObjects.append(avgObj)
+
+        returnObj = np.zeros(self.shapeObject, dtype = float)
+        if self.counter < self.nVec:
+            returnObj = avgObj - errVec
+        else:
+            b = np.zeros((self.nVec + 1, 1), dtype = float)
+            b[self.nVec] = - 1.0
+
+            Bmat = np.zeros((self.nVec + 1, self.nVec + 1), dtype = float)
+            for i in range(self.nVec):
+                Bmat[self.nVec, i] = - 1.0
+                Bmat[i, self.nVec] = - 1.0
+            for i in range(self.nVec):
+                for j in range(self.nVec):
+                    Bmat[i, j] = self.errorVectors[i].conj().T.dot(self.errorVectors[j])
+
+            #w  = lalg.solve(Bmat, b)
+            w = lalg.lstsq(Bmat, b)[0]
+
+            w = w[0:self.nVec]
+            for i in range(self.nVec):
+                returnObj += w[i] * self.averagedObjects[i]
+
+        return returnObj
+
+def pGHF(mol, mo_coeff):
+    #basic molecule info and integrals
+    sz = float(mol.spin) / 2
+    ne = mol.nelectron
+    nao = mol.nao
+    nso = 2 * mol.nao
+    s = mol.intor('int1e_ovlp')
+    t = mol.intor('int1e_kin')
+    v1 = mol.intor('int1e_nuc')
+    v2 = mol.intor('int2e', aosym='s1')
+
+    #spin integrals
+    S = lalg.block_diag(s, s)
+    h1 = t + v1
+    H1 = lalg.block_diag(h1, h1)
+
+    #molecular orbitals
+    assert(mo_coeff.shape[0] == nso)
+    assert(mo_coeff.shape[1] == nso)
+    orbs = mo_coeff + 1j * np.zeros(mo_coeff.shape, dtype = float)
+
+    #Sz symmetry projector
+    nGrid = 12
+    Wg, Rg = calcSzSymmetryProjector(nso, sz, nGrid)
+
+    #wavefunction
+    Phi = orbs[:, 0:ne]
+    Phi += 1j * 0.01 * np.random.randn(Phi.shape[0], Phi.shape[1])
+    Phi += 0.01 * np.random.randn(Phi.shape[0], Phi.shape[1])
+
+    Eold = 100
+    Etol = 1.e-8
+    Gtol = 1.e-6
+    doPrint = True
+    calcStart = time.time()
+    diis = DIIS(2 * nso * ne, (2 * nso * ne, ), 6)
+    for m in range(50):
+        iterStart = time.time()
+
+        #energy
+        #E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
+
+        #gradient
+        E, G = calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg)
+        Efd, Gfd = calcEnergyAndGradientFiniteDifference(S, H1, v2, Phi, Wg, Rg)
+        print("G")
+        print(E)
+        print(G.T)
+        print("G fin-diff")
+        print(Efd)
+        print(Gfd.T)
+
+        #total energy
+        E0 = E + mol.energy_nuc()
+
+        timeEnergyGradient = time.time()
+
+        #calculate update
+        params = complex_to_real(Phi.flatten())
+        #params = params - 1.0 * G
+        params = diis.update(G, params)
+        #scipy optimizer
+        #params = complex_to_real(Phi.flatten())
+        #params = params - dt * Jvec
+
+        #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'SLSQP', jac = jac, tol = tol)
+        #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'L-BFGS-B', jac = jac, tol = tol)
+
+        #update parameters
+        Phi = real_to_complex(params).reshape((nso, ne))
+        #if sol.success == True:
+        #    Phi = real_to_complex(sol.x).reshape((nso, ne))
+        #else:
+        #    Phi = real_to_complex(params - dt * Jvec).reshape((nso, ne))
+
+        timeOptimizer = time.time()
+
+        #update error
+        Eerror = abs(E - Eold)
+        Eold = E
+        Gerror = lalg.norm(G)
+
+        #print
+        if doPrint == True:
+            print(f"-------------------------------- {m} --------------------------------")
+
+            print("Projected values")
+            print(f"  Electronic Energy: {E}")
+            print(f"  Total Energy: {E0}")
+            print(f"  Gradient Norm: {Gerror}")
+            print(f"  Energy Error: {Eerror}")
+            print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
+
+            #print("Scipy Optimizer")
+            #print(f"  message: {sol.message}")
+            #print(f"  fun: {sol.fun}")
+            #print(f"  jac: {lalg.norm(sol.jac)}")
+            #print(f"  nit: {sol.nit}")
+            #print(f"  Time for Optimizer: {timeOptimizer - timeEnergyGradient}")
+
+            #print("Occupied Orbitals")
+            #print(Phi)
+
+        #check for convergence
+        if Eerror < Etol or Gerror < Gtol:
+            break
+
+    if doPrint == True:
+        print(f"\nCalculation Complete")
+        print(f"  Total Time: {time.time() - calcStart}")
+        print(f"  Total Energy: {E0}")
+    return E0, Phi
+
+def readMat(filename, shape, iscomplex):
+   if(iscomplex):
+     matr = np.zeros(shape)
+     mati = np.zeros(shape)
+   else:
+     mat = np.zeros(shape)
+   row = 0
+   fileh = open(filename, 'r')
+   for line in fileh:
+     col = 0
+     for coeff in line.split():
+       if (iscomplex):
+         m = coeff.strip()[1:-1]
+         matr[row, col], mati[row, col] = [float(x) for x in m.split(',')]
+       else:
+         mat[row, col]  = float(coeff)
+       col = col + 1
+     row = row + 1
+   fileh.close()
+   if (iscomplex):
+     mat = matr + 1j * mati
+   return mat
+
+np.set_printoptions(precision=1)
+np.set_printoptions(suppress=False)
+
+N = 4
+a = 1.4
+
+atomstring = ""
+for i in range(N):
+    atomstring += f"H 0 0 {i * a};"
+
+mol = gto.Mole()
+mol.atom = atomstring
+#mol.atom = 'H 0 0 0; H 0 0 1.4; H 0 0 2.8;'
+#mol.atom = 'H 0 0 0; H 0 0 1.4'
+#mol.atom = 'H 0 0 0'
+#mol.atom = 'Li 0 0 0'
+mol.basis = 'sto-3g'
+#mol.basis = '631g'
+#mol.basis = 'ccpvdz'
+mol.verbose = 4
+mol.spin = 0
+mol.unit = 'bohr'
+mol.build()
+
+norb = mol.nao
+mf = scf.GHF(mol)
+dm = mf.get_init_guess()
+dm = dm + np.random.rand(2 * norb, 2 * norb) / 100
+mf.max_cycle = 100
+mf.kernel(dm0 = dm)
+
+S = mf.get_ovlp()
+occidx = mf.mo_occ > 0
+occOrb = mf.mo_coeff[:, occidx]
+#print(occOrb)
+fock = mf.get_hcore() + mf.get_veff()
+#print(fock)
+
+print("\ninitial solution")
+#print(mf.mo_coeff)
+E0, mo = pGHF(mol, mf.mo_coeff)
+
+#print("\nkszghf solution")
+#mo_coeff = readMat("hf.txt", S.shape, True)
+#print(mo_coeff)
+#E0, mo = pGHF(mol, mo_coeff)
+
+#print("\n")
+#print("Final Result")
+#print("Energy")
+#print(E0)
+#print("Molecular Orbitals")
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='ubuntu', release='5.4.0-58-generic', version='#64-Ubuntu SMP Wed Dec 9 08:16:25 UTC 2020', machine='x86_64', processor='x86_64')  Threads 3
+Python 3.8.3 (default, May 19 2020, 18:47:26) 
+[GCC 7.3.0]
+numpy 1.19.4  scipy 1.4.1
+Date: Thu Jan  7 15:44:52 2021
+PySCF version 1.7.5
+PySCF path  /home/iliya/miniconda3/lib/python3.8/site-packages/pyscf
+
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 4
+[INPUT] num. electrons = 4
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = bohr
+[INPUT]  1 H      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 H      0.000000000000   0.000000000000   0.740848095288 AA    0.000000000000   0.000000000000   1.400000000000 Bohr
+[INPUT]  3 H      0.000000000000   0.000000000000   1.481696190576 AA    0.000000000000   0.000000000000   2.800000000000 Bohr
+[INPUT]  4 H      0.000000000000   0.000000000000   2.222544285864 AA    0.000000000000   0.000000000000   4.200000000000 Bohr
+
+nuclear repulsion = 3.0952380952381
+number of shells = 4
+number of NR pGTOs = 12
+number of NR cGTOs = 4
+basis = sto-3g
+ecp = {}
+CPU time:         0.34
+
+
+******** <class 'pyscf.scf.ghf.GHF'> ********
+method = GHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 100
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/KSzGradientDescent/tmpz11x4bwj
+max_memory 4000 MB (current use 76 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -1.92186950836773
+  HOMO = -0.227291204088387  LUMO = 0.437401710282637
+cycle= 1 E= -2.0949905364928  delta_E= -0.173  |g|= 0.0754  |ddm|= 1.02
+  HOMO = -0.42616046620665  LUMO = 0.48373449579859
+cycle= 2 E= -2.09828715685449  delta_E= -0.0033  |g|= 0.0107  |ddm|= 0.142
+  HOMO = -0.424964131449654  LUMO = 0.492151280304761
+cycle= 3 E= -2.09837581327813  delta_E= -8.87e-05  |g|= 0.00268  |ddm|= 0.018
+  HOMO = -0.425960949276517  LUMO = 0.493054574255344
+cycle= 4 E= -2.09838224172369  delta_E= -6.43e-06  |g|= 0.000284  |ddm|= 0.0058
+  HOMO = -0.426049304099369  LUMO = 0.493060643317781
+cycle= 5 E= -2.09838239213805  delta_E= -1.5e-07  |g|= 5.98e-05  |ddm|= 0.00101
+  HOMO = -0.426049293772532  LUMO = 0.493068045466738
+cycle= 6 E= -2.09838240449854  delta_E= -1.24e-08  |g|= 2.05e-05  |ddm|= 0.000348
+  HOMO = -0.426050679042993  LUMO = 0.493063981873585
+cycle= 7 E= -2.09838240612838  delta_E= -1.63e-09  |g|= 1.03e-06  |ddm|= 0.000176
+  HOMO = -0.426050551025228  LUMO = 0.493065406628637
+cycle= 8 E= -2.09838240612979  delta_E= -1.41e-12  |g|= 8.88e-08  |ddm|= 4.38e-06
+  HOMO = -0.426050613238564  LUMO = 0.493065309796144
+Extra cycle  E= -2.0983824061298  delta_E= -7.99e-15  |g|= 2.88e-08  |ddm|= 1.26e-07
+converged SCF energy = -2.0983824061298  <S^2> = 1.3322676e-15  2S+1 = 1
+
+initial solution
+G
+(-5.1935380342019615+5.459248005845653e-06j)
+[-2.2e-03 -1.1e-03 -2.6e-03 -4.1e-03  6.4e-04  2.5e-04  2.3e-03  3.1e-03
+  3.0e-03  1.4e-03 -5.6e-04  7.5e-04 -3.9e-03 -2.0e-03 -6.3e-04 -2.5e-03
+  1.6e-04 -1.5e-03  2.8e-03 -1.1e-03 -1.2e-03  2.4e-03 -2.1e-03  1.0e-03
+  2.8e-03 -2.5e-03 -1.6e-04  1.5e-04 -2.8e-03  2.0e-03  1.3e-03 -5.6e-04
+ -6.7e-04 -3.3e-04 -1.9e-06  1.3e-03  5.1e-04  2.0e-04 -8.1e-05 -9.8e-04
+ -2.3e-05  3.1e-04  1.3e-04 -1.1e-04 -3.0e-04 -5.8e-04 -6.0e-05  6.8e-04
+ -2.5e-04  2.8e-04 -3.7e-04 -9.7e-04 -1.2e-04 -1.7e-04  3.0e-04  3.9e-04
+  8.5e-04 -1.2e-05  1.8e-05  7.5e-04 -9.3e-04  2.9e-04 -2.2e-04 -1.0e-03]
+G fin-diff
+-5.193538035247411
+[-2.2e-03 -1.1e-03 -2.6e-03 -4.1e-03  6.4e-04  2.5e-04  2.3e-03  3.1e-03
+  3.0e-03  1.4e-03 -5.6e-04  7.5e-04 -3.9e-03 -2.0e-03 -6.3e-04 -2.5e-03
+  1.6e-04 -1.5e-03  2.8e-03 -1.1e-03 -1.2e-03  2.4e-03 -2.1e-03  1.0e-03
+  2.8e-03 -2.5e-03 -1.6e-04  1.5e-04 -2.8e-03  2.0e-03  1.3e-03 -5.6e-04
+ -6.7e-04 -3.3e-04 -1.9e-06  1.3e-03  5.1e-04  2.0e-04 -8.1e-05 -9.8e-04
+ -2.3e-05  3.1e-04  1.3e-04 -1.1e-04 -3.0e-04 -5.8e-04 -6.0e-05  6.8e-04
+ -2.5e-04  2.8e-04 -3.7e-04 -9.7e-04 -1.2e-04 -1.7e-04  3.0e-04  3.9e-04
+  8.5e-04 -1.2e-05  1.8e-05  7.5e-04 -9.3e-04  2.9e-04 -2.2e-04 -1.0e-03]
+-------------------------------- 0 --------------------------------
+Projected values
+  Electronic Energy: (-5.1935380342019615+5.459248005845653e-06j)
+  Total Energy: (-2.098299938963866+5.459248005845653e-06j)
+  Gradient Norm: 0.012046369966198725
+  Energy Error: 105.1935380342021
+  Time for Energy and Gradient: 1.3466970019508153
+G
+(-5.1936463949102585-1.6715619699630005e-05j)
+[-8.4e-04  3.6e-04 -1.0e-03 -2.2e-03  9.6e-05 -3.1e-04  1.1e-03  1.6e-03
+  1.6e-03  5.2e-05 -8.3e-04  3.8e-04 -1.9e-03  9.0e-05  4.5e-04 -1.3e-03
+  7.9e-05 -1.6e-03  1.4e-03 -4.8e-05 -5.4e-04  1.7e-03 -1.3e-03  2.7e-04
+  1.4e-03 -9.1e-04  3.5e-04 -2.5e-04 -1.3e-03  2.9e-04  1.8e-04  2.8e-04
+ -6.8e-04 -3.1e-04 -8.0e-05  1.4e-03  5.3e-04  1.1e-04 -2.9e-05 -1.0e-03
+ -4.9e-06  4.1e-04  2.3e-04 -1.3e-04 -2.8e-04 -6.1e-04 -2.1e-04  7.3e-04
+ -3.2e-04  3.7e-04 -5.5e-04 -8.9e-04 -9.9e-05 -2.5e-04  4.2e-04  3.4e-04
+  9.0e-04 -4.7e-05  5.2e-05  7.8e-04 -1.0e-03  2.9e-04 -3.1e-04 -1.1e-03]
+G fin-diff
+-5.193646396027386
+[-8.4e-04  3.6e-04 -1.0e-03 -2.2e-03  9.6e-05 -3.1e-04  1.1e-03  1.6e-03
+  1.6e-03  5.2e-05 -8.3e-04  3.8e-04 -1.9e-03  9.0e-05  4.5e-04 -1.3e-03
+  7.9e-05 -1.6e-03  1.4e-03 -4.8e-05 -5.4e-04  1.7e-03 -1.3e-03  2.7e-04
+  1.4e-03 -9.1e-04  3.5e-04 -2.5e-04 -1.3e-03  2.9e-04  1.8e-04  2.8e-04
+ -6.8e-04 -3.1e-04 -8.0e-05  1.4e-03  5.3e-04  1.1e-04 -2.9e-05 -1.0e-03
+ -4.9e-06  4.1e-04  2.3e-04 -1.3e-04 -2.8e-04 -6.1e-04 -2.1e-04  7.3e-04
+ -3.2e-04  3.7e-04 -5.5e-04 -8.9e-04 -9.9e-05 -2.5e-04  4.2e-04  3.4e-04
+  9.0e-04 -4.7e-05  5.2e-05  7.8e-04 -1.0e-03  2.9e-04 -3.1e-04 -1.1e-03]
+-------------------------------- 1 --------------------------------
+Projected values
+  Electronic Energy: (-5.1936463949102585-1.6715619699630005e-05j)
+  Total Energy: (-2.098408299672163-1.6715619699630005e-05j)
+  Gradient Norm: 0.006708575110974355
+  Energy Error: 0.00011060636446599359
+  Time for Energy and Gradient: 1.2933792510302737
+G
+(-5.193685876201953-2.207261463858907e-05j)
+[-7.1e-04  6.4e-04 -3.0e-04 -1.3e-03  1.6e-04 -3.3e-04  5.6e-04  8.7e-04
+  1.2e-03 -3.7e-04 -7.8e-04  4.0e-04 -1.5e-03  6.7e-04  7.2e-04 -9.5e-04
+ -3.9e-04 -1.2e-03  8.3e-04  3.1e-04  4.7e-05  1.1e-03 -8.2e-04 -1.1e-04
+  8.8e-04 -2.7e-04  3.7e-04 -1.6e-04 -1.0e-03 -2.5e-04 -9.6e-05  3.5e-04
+ -7.1e-04 -3.3e-04 -1.7e-04  1.5e-03  5.7e-04  6.1e-05  1.9e-05 -1.1e-03
+  1.0e-05  5.1e-04  3.4e-04 -1.3e-04 -3.1e-04 -7.1e-04 -3.7e-04  7.7e-04
+ -3.7e-04  4.6e-04 -7.3e-04 -8.6e-04 -8.6e-05 -3.2e-04  5.5e-04  3.1e-04
+  9.6e-04 -5.6e-05  9.0e-05  8.2e-04 -1.1e-03  3.0e-04 -4.1e-04 -1.2e-03]
+G fin-diff
+-5.193685877388282
+[-7.1e-04  6.4e-04 -3.0e-04 -1.3e-03  1.6e-04 -3.3e-04  5.6e-04  8.7e-04
+  1.2e-03 -3.7e-04 -7.8e-04  4.0e-04 -1.5e-03  6.7e-04  7.2e-04 -9.5e-04
+ -3.9e-04 -1.2e-03  8.3e-04  3.1e-04  4.7e-05  1.1e-03 -8.2e-04 -1.1e-04
+  8.8e-04 -2.7e-04  3.7e-04 -1.6e-04 -1.0e-03 -2.5e-04 -9.6e-05  3.5e-04
+ -7.1e-04 -3.3e-04 -1.7e-04  1.5e-03  5.7e-04  6.1e-05  1.9e-05 -1.1e-03
+  1.0e-05  5.1e-04  3.4e-04 -1.3e-04 -3.1e-04 -7.1e-04 -3.7e-04  7.7e-04
+ -3.7e-04  4.6e-04 -7.3e-04 -8.6e-04 -8.6e-05 -3.2e-04  5.5e-04  3.1e-04
+  9.6e-04 -5.6e-05  9.0e-05  8.2e-04 -1.1e-03  3.0e-04 -4.1e-04 -1.2e-03]
+-------------------------------- 2 --------------------------------
+Projected values
+  Electronic Energy: (-5.193685876201953-2.207261463858907e-05j)
+  Total Energy: (-2.0984477809638578-2.207261463858907e-05j)
+  Gradient Norm: 0.005436479907801028
+  Energy Error: 3.9843064498752664e-05
+  Time for Energy and Gradient: 1.2840300099924207
+G
+(-5.1937148412082985-2.3753265384587133e-05j)
+[-7.4e-04  7.6e-04 -3.6e-06 -8.4e-04  2.6e-04 -3.3e-04  2.8e-04  4.7e-04
+  1.1e-03 -5.7e-04 -7.1e-04  4.7e-04 -1.3e-03  9.4e-04  7.8e-04 -8.3e-04
+ -6.8e-04 -1.1e-03  5.5e-04  4.2e-04  3.8e-04  7.7e-04 -5.9e-04 -2.8e-04
+  6.9e-04  6.9e-05  3.3e-04 -1.1e-05 -9.3e-04 -5.4e-04 -1.9e-04  2.5e-04
+ -7.7e-04 -3.6e-04 -2.6e-04  1.6e-03  6.3e-04  3.3e-05  6.2e-05 -1.2e-03
+  2.4e-05  6.3e-04  4.7e-04 -1.3e-04 -3.4e-04 -8.4e-04 -5.3e-04  8.2e-04
+ -4.2e-04  5.6e-04 -9.0e-04 -8.7e-04 -7.3e-05 -4.0e-04  6.8e-04  2.8e-04
+  1.0e-03 -5.6e-05  1.3e-04  8.8e-04 -1.2e-03  3.2e-04 -5.0e-04 -1.3e-03]
+G fin-diff
+-5.193714842477652
+[-7.4e-04  7.6e-04 -3.6e-06 -8.4e-04  2.6e-04 -3.3e-04  2.8e-04  4.7e-04
+  1.1e-03 -5.7e-04 -7.1e-04  4.7e-04 -1.3e-03  9.4e-04  7.8e-04 -8.3e-04
+ -6.8e-04 -1.1e-03  5.5e-04  4.2e-04  3.8e-04  7.7e-04 -5.9e-04 -2.8e-04
+  6.9e-04  6.9e-05  3.3e-04 -1.1e-05 -9.3e-04 -5.4e-04 -1.9e-04  2.5e-04
+ -7.7e-04 -3.6e-04 -2.6e-04  1.6e-03  6.3e-04  3.3e-05  6.2e-05 -1.2e-03
+  2.4e-05  6.3e-04  4.7e-04 -1.3e-04 -3.4e-04 -8.4e-04 -5.3e-04  8.2e-04
+ -4.2e-04  5.6e-04 -9.0e-04 -8.7e-04 -7.3e-05 -4.0e-04  6.8e-04  2.8e-04
+  1.0e-03 -5.6e-05  1.3e-04  8.8e-04 -1.2e-03  3.2e-04 -5.0e-04 -1.3e-03]
+-------------------------------- 3 --------------------------------
+Projected values
+  Electronic Energy: (-5.1937148412082985-2.3753265384587133e-05j)
+  Total Energy: (-2.098476745970203-2.3753265384587133e-05j)
+  Gradient Norm: 0.005377620686388382
+  Energy Error: 2.901372398572818e-05
+  Time for Energy and Gradient: 1.2777856210013852
+G
+(-5.1937445486043945-2.419802687180073e-05j)
+[-8.1e-04  8.6e-04  1.2e-04 -6.1e-04  3.5e-04 -3.4e-04  1.6e-04  2.5e-04
+  1.0e-03 -6.8e-04 -6.6e-04  5.3e-04 -1.3e-03  1.1e-03  8.0e-04 -7.8e-04
+ -8.6e-04 -1.0e-03  4.1e-04  4.3e-04  5.5e-04  6.3e-04 -4.6e-04 -3.4e-04
+  6.5e-04  2.7e-04  3.2e-04  1.3e-04 -9.5e-04 -7.5e-04 -2.4e-04  1.3e-04
+ -8.4e-04 -4.1e-04 -3.5e-04  1.7e-03  6.9e-04  1.8e-05  1.0e-04 -1.3e-03
+  3.6e-05  7.5e-04  6.0e-04 -1.4e-04 -3.8e-04 -9.8e-04 -7.1e-04  8.9e-04
+ -4.8e-04  6.7e-04 -1.1e-03 -8.9e-04 -6.0e-05 -4.9e-04  8.3e-04  2.7e-04
+  1.1e-03 -5.3e-05  1.7e-04  9.6e-04 -1.3e-03  3.5e-04 -6.1e-04 -1.4e-03]
+G fin-diff
+-5.193744549975611
+[-8.1e-04  8.6e-04  1.2e-04 -6.1e-04  3.5e-04 -3.4e-04  1.6e-04  2.5e-04
+  1.0e-03 -6.8e-04 -6.6e-04  5.3e-04 -1.3e-03  1.1e-03  8.0e-04 -7.8e-04
+ -8.6e-04 -1.0e-03  4.1e-04  4.3e-04  5.5e-04  6.3e-04 -4.6e-04 -3.4e-04
+  6.5e-04  2.7e-04  3.2e-04  1.3e-04 -9.5e-04 -7.5e-04 -2.4e-04  1.3e-04
+ -8.4e-04 -4.1e-04 -3.5e-04  1.7e-03  6.9e-04  1.8e-05  1.0e-04 -1.3e-03
+  3.6e-05  7.5e-04  6.0e-04 -1.4e-04 -3.8e-04 -9.8e-04 -7.1e-04  8.9e-04
+ -4.8e-04  6.7e-04 -1.1e-03 -8.9e-04 -6.0e-05 -4.9e-04  8.3e-04  2.7e-04
+  1.1e-03 -5.3e-05  1.7e-04  9.6e-04 -1.3e-03  3.5e-04 -6.1e-04 -1.4e-03]
+-------------------------------- 4 --------------------------------
+Projected values
+  Electronic Energy: (-5.1937445486043945-2.419802687180073e-05j)
+  Total Energy: (-2.098506453366299-2.419802687180073e-05j)
+  Gradient Norm: 0.005726367138824302
+  Energy Error: 2.9710725261829493e-05
+  Time for Energy and Gradient: 1.2893818560405634
+G
+(-5.193778777386579-2.409547823970949e-05j)
+[-8.9e-04  9.6e-04  1.8e-04 -4.7e-04  4.3e-04 -3.7e-04  1.2e-04  1.2e-04
+  1.0e-03 -7.5e-04 -6.4e-04  5.8e-04 -1.3e-03  1.2e-03  8.2e-04 -7.5e-04
+ -9.7e-04 -1.0e-03  3.2e-04  3.9e-04  6.6e-04  5.7e-04 -3.9e-04 -3.7e-04
+  6.8e-04  4.1e-04  3.2e-04  2.6e-04 -1.0e-03 -9.1e-04 -3.0e-04  8.0e-06
+ -9.3e-04 -4.6e-04 -4.5e-04  1.8e-03  7.7e-04  9.4e-06  1.4e-04 -1.4e-03
+  4.7e-05  8.7e-04  7.5e-04 -1.5e-04 -4.3e-04 -1.1e-03 -8.9e-04  9.6e-04
+ -5.4e-04  7.9e-04 -1.3e-03 -9.4e-04 -4.8e-05 -5.8e-04  9.9e-04  2.6e-04
+  1.2e-03 -4.7e-05  2.0e-04  1.0e-03 -1.4e-03  3.8e-04 -7.2e-04 -1.5e-03]
+G fin-diff
+-5.193778778881722
+[-8.9e-04  9.6e-04  1.8e-04 -4.7e-04  4.3e-04 -3.7e-04  1.2e-04  1.2e-04
+  1.0e-03 -7.5e-04 -6.4e-04  5.8e-04 -1.3e-03  1.2e-03  8.2e-04 -7.5e-04
+ -9.7e-04 -1.0e-03  3.2e-04  3.9e-04  6.6e-04  5.7e-04 -3.9e-04 -3.7e-04
+  6.8e-04  4.1e-04  3.2e-04  2.6e-04 -1.0e-03 -9.1e-04 -3.0e-04  8.1e-06
+ -9.3e-04 -4.6e-04 -4.5e-04  1.8e-03  7.7e-04  9.4e-06  1.4e-04 -1.4e-03
+  4.7e-05  8.7e-04  7.5e-04 -1.5e-04 -4.3e-04 -1.1e-03 -8.9e-04  9.6e-04
+ -5.4e-04  7.9e-04 -1.3e-03 -9.4e-04 -4.8e-05 -5.8e-04  9.9e-04  2.6e-04
+  1.2e-03 -4.7e-05  2.0e-04  1.0e-03 -1.4e-03  3.8e-04 -7.2e-04 -1.5e-03]
+-------------------------------- 5 --------------------------------
+Projected values
+  Electronic Energy: (-5.193778777386579-2.409547823970949e-05j)
+  Total Energy: (-2.0985406821484838-2.409547823970949e-05j)
+  Gradient Norm: 0.006251039395457317
+  Energy Error: 3.422893580092866e-05
+  Time for Energy and Gradient: 1.293313001981005
+G
+(-5.193631543970697-6.185538639760125e-07j)
+[-3.8e-04  4.0e-04  1.7e-04  8.8e-05  1.1e-04 -2.5e-04 -1.0e-04 -2.1e-04
+  5.3e-04 -1.7e-04 -1.1e-04  3.4e-04 -6.9e-04  3.4e-04  1.7e-04 -3.0e-04
+ -3.7e-04 -4.9e-04  1.9e-04  5.0e-04  2.5e-04  3.6e-04 -9.0e-05 -4.9e-04
+  1.8e-04  8.4e-05 -1.4e-04  2.1e-04 -3.2e-04 -2.9e-04  2.3e-04 -1.2e-05
+  1.2e-04  1.3e-04  1.5e-04  1.1e-04 -1.2e-04 -7.9e-05  2.2e-05 -1.2e-04
+  5.1e-05 -7.2e-05 -3.7e-04  5.5e-05 -2.2e-06  1.2e-04  4.4e-04 -9.6e-06
+  3.7e-05 -2.5e-04  2.6e-04 -7.1e-05 -6.5e-05  2.2e-04 -2.4e-04  1.0e-04
+  1.1e-04 -3.6e-05  3.5e-05 -1.3e-04 -9.0e-05 -5.3e-05  6.1e-05  9.2e-05]
+G fin-diff
+-5.193631543878325
+[-3.8e-04  4.0e-04  1.7e-04  8.8e-05  1.1e-04 -2.5e-04 -1.0e-04 -2.1e-04
+  5.3e-04 -1.7e-04 -1.1e-04  3.4e-04 -6.9e-04  3.4e-04  1.7e-04 -3.0e-04
+ -3.7e-04 -4.9e-04  1.9e-04  5.0e-04  2.5e-04  3.6e-04 -9.0e-05 -4.9e-04
+  1.8e-04  8.4e-05 -1.4e-04  2.1e-04 -3.2e-04 -2.9e-04  2.3e-04 -1.1e-05
+  1.2e-04  1.3e-04  1.5e-04  1.1e-04 -1.2e-04 -7.9e-05  2.2e-05 -1.2e-04
+  5.1e-05 -7.2e-05 -3.7e-04  5.5e-05 -2.2e-06  1.2e-04  4.4e-04 -9.6e-06
+  3.7e-05 -2.5e-04  2.6e-04 -7.1e-05 -6.5e-05  2.2e-04 -2.4e-04  1.0e-04
+  1.1e-04 -3.6e-05  3.5e-05 -1.3e-04 -9.0e-05 -5.3e-05  6.1e-05  9.2e-05]
+-------------------------------- 6 --------------------------------
+Projected values
+  Electronic Energy: (-5.193631543970697-6.185538639760125e-07j)
+  Total Energy: (-2.0983934487326015-6.185538639760125e-07j)
+  Gradient Norm: 0.001960756441056275
+  Energy Error: 0.00014909340941340586
+  Time for Energy and Gradient: 1.886785288050305
+G
+(-5.193632175401608+2.375360628691117e-07j)
+[-3.2e-04  4.6e-04  1.5e-04  1.0e-04  7.8e-05 -2.9e-04 -8.4e-05 -2.1e-04
+  5.0e-04 -1.8e-04 -1.1e-04  3.1e-04 -6.4e-04  3.8e-04  1.7e-04 -2.7e-04
+ -3.0e-04 -5.7e-04  1.8e-04  4.8e-04  1.9e-04  4.1e-04 -9.3e-05 -4.8e-04
+  1.7e-04  1.0e-04 -1.3e-04  2.1e-04 -2.8e-04 -3.5e-04  2.1e-04 -1.9e-05
+  1.3e-04  1.3e-04  1.5e-04  9.2e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.4e-05 -7.4e-05 -3.7e-04  6.0e-05  1.6e-06  1.3e-04  4.4e-04 -2.1e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.7e-05 -6.3e-05  2.2e-04 -2.4e-04  9.7e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.7e-05 -5.6e-05  5.8e-05  1.2e-04]
+G fin-diff
+-5.193632175286452
+[-3.2e-04  4.6e-04  1.5e-04  1.0e-04  7.8e-05 -2.9e-04 -8.3e-05 -2.1e-04
+  5.0e-04 -1.8e-04 -1.1e-04  3.1e-04 -6.4e-04  3.8e-04  1.7e-04 -2.7e-04
+ -3.0e-04 -5.7e-04  1.8e-04  4.8e-04  1.9e-04  4.1e-04 -9.3e-05 -4.8e-04
+  1.7e-04  1.0e-04 -1.3e-04  2.1e-04 -2.8e-04 -3.5e-04  2.1e-04 -1.9e-05
+  1.3e-04  1.3e-04  1.5e-04  9.2e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.4e-05 -7.4e-05 -3.7e-04  6.0e-05  1.6e-06  1.3e-04  4.4e-04 -2.1e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.7e-05 -6.3e-05  2.2e-04 -2.4e-04  9.7e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.7e-05 -5.6e-05  5.8e-05  1.2e-04]
+-------------------------------- 7 --------------------------------
+Projected values
+  Electronic Energy: (-5.193632175401608+2.375360628691117e-07j)
+  Total Energy: (-2.0983940801635126+2.375360628691117e-07j)
+  Gradient Norm: 0.0019483407581893928
+  Energy Error: 1.063764522041905e-06
+  Time for Energy and Gradient: 1.3659975970513187
+G
+(-5.193632174927838+2.596955840288188e-07j)
+[-3.2e-04  4.7e-04  1.5e-04  1.0e-04  7.6e-05 -2.9e-04 -8.3e-05 -2.1e-04
+  5.0e-04 -1.8e-04 -1.1e-04  3.1e-04 -6.4e-04  3.8e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.8e-04  4.8e-04  1.9e-04  4.1e-04 -9.4e-05 -4.8e-04
+  1.7e-04  1.1e-04 -1.3e-04  2.1e-04 -2.8e-04 -3.5e-04  2.1e-04 -1.9e-05
+  1.3e-04  1.3e-04  1.5e-04  9.2e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.4e-05 -7.4e-05 -3.7e-04  6.0e-05  1.6e-06  1.3e-04  4.4e-04 -2.1e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.7e-05 -6.3e-05  2.2e-04 -2.4e-04  9.7e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.7e-05 -5.6e-05  5.8e-05  1.1e-04]
+G fin-diff
+-5.193632174812844
+[-3.2e-04  4.7e-04  1.5e-04  1.0e-04  7.6e-05 -2.9e-04 -8.3e-05 -2.1e-04
+  5.0e-04 -1.8e-04 -1.1e-04  3.1e-04 -6.4e-04  3.8e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.8e-04  4.8e-04  1.9e-04  4.1e-04 -9.4e-05 -4.8e-04
+  1.7e-04  1.1e-04 -1.3e-04  2.1e-04 -2.8e-04 -3.5e-04  2.1e-04 -1.9e-05
+  1.3e-04  1.3e-04  1.5e-04  9.2e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.4e-05 -7.4e-05 -3.7e-04  6.0e-05  1.6e-06  1.3e-04  4.4e-04 -2.1e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.7e-05 -6.3e-05  2.2e-04 -2.4e-04  9.7e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.7e-05 -5.6e-05  5.8e-05  1.1e-04]
+-------------------------------- 8 --------------------------------
+Projected values
+  Electronic Energy: (-5.193632174927838+2.596955840288188e-07j)
+  Total Energy: (-2.0983940796897422+2.596955840288188e-07j)
+  Gradient Norm: 0.001948287904713124
+  Energy Error: 2.2164585183982038e-08
+  Time for Energy and Gradient: 1.2821310309809633
+G
+(-5.193632132204452+2.4630210992002427e-07j)
+[-3.2e-04  4.7e-04  1.5e-04  9.8e-05  7.6e-05 -2.9e-04 -8.2e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.6e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.7e-04  1.9e-04  4.1e-04 -9.6e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.1e-04 -2.7e-04 -3.5e-04  2.2e-04 -2.3e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.3e-05 -7.4e-05 -3.7e-04  6.0e-05  1.5e-06  1.3e-04  4.4e-04 -2.1e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.8e-05 -6.3e-05  2.2e-04 -2.4e-04  9.7e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+G fin-diff
+-5.1936321320903005
+[-3.2e-04  4.7e-04  1.5e-04  9.8e-05  7.6e-05 -2.9e-04 -8.2e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.6e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.7e-04  1.9e-04  4.1e-04 -9.6e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.1e-04 -2.7e-04 -3.5e-04  2.2e-04 -2.3e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.3e-05 -7.4e-05 -3.7e-04  6.0e-05  1.5e-06  1.3e-04  4.4e-04 -2.1e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.8e-05 -6.3e-05  2.2e-04 -2.4e-04  9.7e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+-------------------------------- 9 --------------------------------
+Projected values
+  Electronic Energy: (-5.193632132204452+2.4630210992002427e-07j)
+  Total Energy: (-2.0983940369663565+2.4630210992002427e-07j)
+  Gradient Norm: 0.0019482526269789186
+  Energy Error: 4.47735729635208e-08
+  Time for Energy and Gradient: 1.292789069993887
+G
+(-5.193632116947768+2.4010219789266596e-07j)
+[-3.2e-04  4.7e-04  1.5e-04  9.9e-05  7.6e-05 -2.9e-04 -8.3e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.8e-04  1.9e-04  4.1e-04 -9.5e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.1e-04 -2.7e-04 -3.5e-04  2.1e-04 -2.1e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.3e-05 -7.4e-05 -3.7e-04  5.9e-05  1.6e-06  1.3e-04  4.4e-04 -2.1e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.8e-05 -6.3e-05  2.2e-04 -2.4e-04  9.8e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+G fin-diff
+-5.1936321168338395
+[-3.2e-04  4.7e-04  1.5e-04  9.9e-05  7.6e-05 -2.9e-04 -8.3e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.8e-04  1.9e-04  4.1e-04 -9.5e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.1e-04 -2.7e-04 -3.5e-04  2.1e-04 -2.1e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.3e-05 -7.4e-05 -3.7e-04  5.9e-05  1.6e-06  1.3e-04  4.4e-04 -2.1e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.8e-05 -6.3e-05  2.2e-04 -2.4e-04  9.8e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+-------------------------------- 10 --------------------------------
+Projected values
+  Electronic Energy: (-5.193632116947768+2.4010219789266596e-07j)
+  Total Energy: (-2.0983940217096726+2.4010219789266596e-07j)
+  Gradient Norm: 0.0019482455291521459
+  Energy Error: 1.6468312398859906e-08
+  Time for Energy and Gradient: 1.2734866499667987
+G
+(-5.193632071514756+2.6240945044187464e-07j)
+[-3.2e-04  4.6e-04  1.5e-04  9.5e-05  7.5e-05 -2.9e-04 -8.2e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.8e-04  1.9e-04  4.1e-04 -9.7e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.0e-04 -2.7e-04 -3.5e-04  2.1e-04 -1.9e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.1e-05  2.5e-05 -1.1e-04
+  5.3e-05 -7.5e-05 -3.7e-04  5.9e-05  1.7e-06  1.3e-04  4.4e-04 -2.0e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.9e-05 -6.3e-05  2.2e-04 -2.4e-04  9.8e-05
+  9.9e-05 -3.4e-05  3.6e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+G fin-diff
+-5.193632071401422
+[-3.2e-04  4.7e-04  1.5e-04  9.5e-05  7.5e-05 -2.9e-04 -8.1e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.8e-04  1.9e-04  4.1e-04 -9.7e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.0e-04 -2.7e-04 -3.5e-04  2.1e-04 -1.9e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.1e-05  2.5e-05 -1.1e-04
+  5.3e-05 -7.5e-05 -3.7e-04  5.9e-05  1.7e-06  1.3e-04  4.4e-04 -2.0e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.9e-05 -6.3e-05  2.2e-04 -2.4e-04  9.8e-05
+  9.9e-05 -3.4e-05  3.6e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+-------------------------------- 11 --------------------------------
+Projected values
+  Electronic Energy: (-5.193632071514756+2.6240945044187464e-07j)
+  Total Energy: (-2.0983939762766606+2.6240945044187464e-07j)
+  Gradient Norm: 0.0019482560686655563
+  Energy Error: 5.0613951608535594e-08
+  Time for Energy and Gradient: 1.3433660559821874
+G
+(-5.193632116112529+2.456957228245261e-07j)
+[-3.2e-04  4.7e-04  1.5e-04  9.8e-05  7.5e-05 -2.9e-04 -8.2e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.8e-04  1.9e-04  4.1e-04 -9.5e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.1e-04 -2.7e-04 -3.5e-04  2.1e-04 -2.1e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.3e-05 -7.4e-05 -3.7e-04  5.9e-05  1.5e-06  1.3e-04  4.4e-04 -2.0e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.8e-05 -6.3e-05  2.2e-04 -2.4e-04  9.8e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+G fin-diff
+-5.193632115999001
+[-3.2e-04  4.7e-04  1.5e-04  9.8e-05  7.6e-05 -2.9e-04 -8.2e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.8e-04  1.9e-04  4.1e-04 -9.5e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.1e-04 -2.7e-04 -3.5e-04  2.1e-04 -2.1e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.3e-05 -7.4e-05 -3.7e-04  5.9e-05  1.5e-06  1.3e-04  4.4e-04 -2.0e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.8e-05 -6.3e-05  2.2e-04 -2.4e-04  9.8e-05
+  9.9e-05 -3.4e-05  3.7e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+-------------------------------- 12 --------------------------------
+Projected values
+  Electronic Energy: (-5.193632116112529+2.456957228245261e-07j)
+  Total Energy: (-2.098394020874434+2.456957228245261e-07j)
+  Gradient Norm: 0.0019482435942161265
+  Energy Error: 4.762677912397342e-08
+  Time for Energy and Gradient: 1.32610648003174
+G
+(-5.193632115926069+2.459348132998038e-07j)
+[-3.2e-04  4.7e-04  1.5e-04  9.8e-05  7.5e-05 -2.9e-04 -8.2e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.8e-04  1.9e-04  4.1e-04 -9.5e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.1e-04 -2.7e-04 -3.5e-04  2.1e-04 -2.1e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.3e-05 -7.4e-05 -3.7e-04  5.9e-05  1.5e-06  1.3e-04  4.4e-04 -2.0e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.8e-05 -6.3e-05  2.2e-04 -2.4e-04  9.8e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+G fin-diff
+-5.1936321158125125
+[-3.2e-04  4.7e-04  1.5e-04  9.8e-05  7.6e-05 -2.9e-04 -8.2e-05 -2.1e-04
+  5.0e-04 -1.9e-04 -1.1e-04  3.1e-04 -6.4e-04  3.9e-04  1.7e-04 -2.7e-04
+ -2.9e-04 -5.7e-04  1.9e-04  4.8e-04  1.9e-04  4.1e-04 -9.5e-05 -4.8e-04
+  1.6e-04  1.1e-04 -1.3e-04  2.1e-04 -2.7e-04 -3.5e-04  2.1e-04 -2.1e-05
+  1.3e-04  1.3e-04  1.5e-04  9.3e-05 -1.3e-04 -8.2e-05  2.6e-05 -1.1e-04
+  5.3e-05 -7.4e-05 -3.7e-04  5.9e-05  1.5e-06  1.3e-04  4.4e-04 -2.0e-05
+  4.0e-05 -2.6e-04  2.7e-04 -5.8e-05 -6.3e-05  2.2e-04 -2.4e-04  9.8e-05
+  9.9e-05 -3.3e-05  3.7e-05 -1.5e-04 -7.8e-05 -5.6e-05  5.9e-05  1.1e-04]
+-------------------------------- 13 --------------------------------
+Projected values
+  Electronic Energy: (-5.193632115926069+2.459348132998038e-07j)
+  Total Energy: (-2.0983940206879734+2.459348132998038e-07j)
+  Gradient Norm: 0.001948243591395052
+  Energy Error: 3.0320260542878186e-10
+  Time for Energy and Gradient: 1.3396858429769054
+
+Calculation Complete
+  Total Time: 18.89769095700467
+  Total Energy: (-2.0983940206879734+2.459348132998038e-07j)

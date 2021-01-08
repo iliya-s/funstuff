@@ -113,10 +113,8 @@ def calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg):
     Nab = np.zeros(S.shape, dtype = complex)
 
     for i in range(len(Wg)):
-        Phig = Rg[i].dot(Phi)
-
         #overlap quantities
-        O = Phi.conj().T.dot(S).dot(Phig)
+        O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi, dtype = complex, optimize = True)
         invO = lalg.inv(O)
         detO = lalg.det(O)
 
@@ -125,7 +123,7 @@ def calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg):
         detOab += detO * np.einsum('ab,bc,cd,de,em,m,nf,fa->mn', invO, Phi.conj().T, S, dm, S, np.diag(Rg[i]), S, Phi, dtype = complex, optimize = True)
 
         #transition density matrix
-        tdm = Phig.dot(invO).dot(Phi.conj().T)
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi, invO, Phi.conj().T, dtype = complex, optimize = True)
 
         #hamiltonian quantities
         G1 = contractEri(v2, tdm)
@@ -137,8 +135,8 @@ def calcEnergyAndFockMatrix(S, H1, v2, Phi, Wg, Rg):
 
         X = np.einsum('ab,bc,cd,de,ef->af', S, Phi, invO, Phi.conj().T, S, dtype = complex, optimize = True)
 
-        A1 = np.einsum('na,ab,bm,m->mn', X, dm, M1, np.diag(Rg[i]))
-        A2 = np.einsum('na,a,ab,bm->mn', M1, np.diag(Rg[i]), dm, X)
+        A1 = np.einsum('na,ab,bm,m->mn', X, dm, M1, np.diag(Rg[i]), dtype = complex, optimize = True)
+        A2 = np.einsum('na,a,ab,bm->mn', M1, np.diag(Rg[i]), dm, X, dtype = complex, optimize = True)
 
         B1 = - np.einsum('ab,b,bc,cm,nd,d,de,ef,fa->mn', M1, np.diag(Rg[i]), dm, X, S, np.diag(Rg[i]), dm, X, dm, dtype = complex, optimize = True)
         B2 = - np.einsum('ab,b,bc,cd,de,em,m,nf,fa->mn', M1, np.diag(Rg[i]), dm, X, dm, S, np.diag(Rg[i]), X, dm, dtype = complex, optimize = True)
