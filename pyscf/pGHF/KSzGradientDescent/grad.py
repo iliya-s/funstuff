@@ -52,6 +52,7 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
     D = 0.0
     N = 0.0
 
+    #1
     for i in range(len(Wg)):
         #overlap quantities
         O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi, dtype = complex, optimize = True)
@@ -69,7 +70,11 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
         #averages with symmetry weights
         D += Wg[i] * detO
         N += Wg[i] * detO * H
+        #print(f'D: {detO}')
+        #print(f'N: {detO * H}')
 
+    #print("\n")
+    #2
     for i in range(len(Wg)):
         #overlap quantities
         O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi.conj(), dtype = complex, optimize = True)
@@ -87,7 +92,54 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
         #averages with symmetry weights
         D += Wg[i] * detO
         N += Wg[i] * detO * H
+        #print(f'D: {detO}')
+        #print(f'N: {detO * H}')
 
+    #print("\n")
+    #3
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.T, S, np.diag(Rg[i]), Phi, dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi, invO, Phi.T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        N += Wg[i] * detO * H
+        #print(f'D: {detO}')
+        #print(f'N: {detO * H}')
+
+    #print("\n")
+    #4
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.T, S, np.diag(Rg[i]), Phi.conj(), dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi.conj(), invO, Phi.T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        N += Wg[i] * detO * H
+        #print(f'D: {detO}')
+        #print(f'N: {detO * H}')
+
+    #print("\n")
     E = N / D
     return np.real(E)
 
@@ -103,6 +155,7 @@ def calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg):
     Dmn_bar = np.zeros(Phi.shape, dtype = complex)
     Nmn_bar = np.zeros(Phi.shape, dtype = complex)
 
+    #1
     for i in range(len(Wg)):
         #overlap quantities
         O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi, dtype = complex, optimize = True)
@@ -141,7 +194,7 @@ def calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg):
         Nmn += Wg[i] * (detOmn * H + detO * Hmn)
         Nmn_bar += Wg[i] * (detOmn_bar * H + detO * Hmn_bar)
 
-    #for complex conjugation projection, calculate overlaps with the conjugate of the ket, note that the only nonzero derivatives are with respect to m,n* parameters
+    #2
     for i in range(len(Wg)):
         #overlap quantities
         O = np.einsum('ma,ab,b,bn->mn', Phi.conj().T, S, np.diag(Rg[i]), Phi.conj(), dtype = complex, optimize = True)
@@ -175,7 +228,88 @@ def calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg):
         D += Wg[i] * detO
         Dmn_bar += Wg[i] * detOmn_bar
 
+        N += Wg[i] * (detO * H)
+        Nmn_bar += Wg[i] * (detOmn_bar * H + detO * Hmn_bar)
+
+    #3
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.T, S, np.diag(Rg[i]), Phi, dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #derivative of detO with respect to m,n orbital parameter
+        detOmn = detO * np.einsum('na,ab,bm,m->mn', invO, Phi.T, S, np.diag(Rg[i]), dtype = complex, optimize = True)
+        detOmn += detO * np.einsum('ma,a,ab,bn->mn', S, np.diag(Rg[i]), Phi, invO, dtype = complex, optimize = True)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi, invO, Phi.T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #drivative of H with respect to m,n orbital parameter
+        M1 = H1 + G1
+
+        Amn1 = np.einsum('na,ab,bm,m->mn', invO, Phi.T, M1, np.diag(Rg[i]), dtype = complex, optimize = True)
+        Amn2 = np.einsum('ma,a,ab,bn->mn', M1, np.diag(Rg[i]), Phi, invO, dtype = complex, optimize = True)
+
+        Bmn1 = np.einsum('na,ab,bc,c,cd,de,ef,fm,m->mn', invO, Phi.T, M1, np.diag(Rg[i]), Phi, invO, Phi.T, S, np.diag(Rg[i]), dtype = complex, optimize = True)
+        Bmn2 = np.einsum('ma,a,ab,bc,cd,de,e,ef,fn->mn', S, np.diag(Rg[i]), Phi, invO, Phi.T, M1, np.diag(Rg[i]), Phi, invO, dtype = complex, optimize = True)
+
+        Hmn = Amn1 + Amn2 - Bmn1 - Bmn2
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        Dmn += Wg[i] * detOmn
+
         N += Wg[i] * detO * H
+        Nmn += Wg[i] * (detOmn * H + detO * Hmn)
+
+    #4
+    for i in range(len(Wg)):
+        #overlap quantities
+        O = np.einsum('ma,ab,b,bn->mn', Phi.T, S, np.diag(Rg[i]), Phi.conj(), dtype = complex, optimize = True)
+        invO = lalg.inv(O)
+        detO = lalg.det(O)
+
+        #derivative of detO with respect to m,n orbital parameter
+        detOmn_bar = detO * np.einsum('na,ab,bm,m->mn', invO, Phi.T, S, np.diag(Rg[i]), dtype = complex, optimize = True)
+        detOmn = detO * np.einsum('ma,a,ab,bn->mn', S, np.diag(Rg[i]), Phi.conj(), invO, dtype = complex, optimize = True)
+
+        #transition density matrix
+        tdm = np.einsum('m,ma,ab,bn->mn', np.diag(Rg[i]), Phi.conj(), invO, Phi.T, dtype = complex, optimize = True)
+
+        #hamiltonian quantities
+        G1 = contractEri(v2, tdm)
+        F1 = H1 + 0.5 * G1
+        H = np.einsum('pq,qp->', F1, tdm, dtype = complex, optimize = True)
+
+        #drivative of H with respect to m,n orbital parameter
+        M1 = H1 + G1
+
+        Amn_bar = np.einsum('na,ab,bm,m->mn', invO, Phi.T, M1, np.diag(Rg[i]), dtype = complex, optimize = True)
+        Bmn_bar = np.einsum('na,ab,bc,c,cd,de,ef,fm,m->mn', invO, Phi.T, M1, np.diag(Rg[i]), Phi.conj(), invO, Phi.T, S, np.diag(Rg[i]), dtype = complex, optimize = True)
+        Hmn_bar = Amn_bar - Bmn_bar
+
+        Amn = np.einsum('ma,a,ab,bn->mn', M1, np.diag(Rg[i]), Phi.conj(), invO, dtype = complex, optimize = True)
+        Bmn = np.einsum('ma,a,ab,bc,cd,de,e,ef,fn->mn', S, np.diag(Rg[i]), Phi.conj(), invO, Phi.T, M1, np.diag(Rg[i]), Phi.conj(), invO, dtype = complex, optimize = True)
+        Hmn = Amn - Bmn
+
+        #averages with symmetry weights
+        D += Wg[i] * detO
+        Dmn += Wg[i] * detOmn
+        Dmn_bar += Wg[i] * detOmn_bar
+
+        N += Wg[i] * detO * H
+        Nmn += Wg[i] * (detOmn * H + detO * Hmn)
         Nmn_bar += Wg[i] * (detOmn_bar * H + detO * Hmn_bar)
 
     E = N / D
@@ -185,9 +319,8 @@ def calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg):
     Jr = np.real(J + J_bar)
     Ji = np.real(1j * (J - J_bar))
 
-    #return E, np.concatenate((np.real(Jr), np.real(Ji)), axis = 0)
     J_vec = np.concatenate((Jr.flatten(), Ji.flatten()), axis = 0)
-    return E, J_vec
+    return np.real(E), J_vec
 
 def calcEnergyAndGradientFiniteDifference(S, H1, v2, Phi, Wg, Rg):
     ds = 1.e-6
@@ -213,24 +346,8 @@ def calcEnergyAndGradientFiniteDifference(S, H1, v2, Phi, Wg, Rg):
 
     #return E0, np.concatenate((Jr, Ji), axis = 0)
     J_vec = np.concatenate((Jr.flatten(), Ji.flatten()), axis = 0)
-    return E, J_vec
+    return E0, J_vec
 
-#this takes a vector of 2N^2 and turns it into a complex matrix of dimension N
-def vec_to_matrix(vec):
-    vecr = vec[:len(vec)//2]
-    veci = vec[len(vec)//2:]
-    N = np.sqrt(len(vecr))
-    mat = np.zeros((N, N))
-    for m in range(N):
-        for n in range(N):
-            mat[m, n] = mat[m, n]
-    return mat
-
-#this takes a complex matrix of dimension N and turns it into a complex vector of 2N^2
-def matrix_to_vec(mat):
-    matr = np.real(mat)
-    mati = np.imag(mat)
-    return np.concatenate((matr.flatten(), mati.flatten()), axis = 0)
 
 #the following four functions are helpers to use scipy's optimization library
 
@@ -245,6 +362,8 @@ def fun(params, nelectron, S, H1, v2, Wg, Rg):
     #wavefunction
     nso = S.shape[0]
     Phi = paramVec.reshape((nso, nelectron))
+    #calc energy
+    E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
     return calcEnergy(S, H1, v2, Phi, Wg, Rg)
 
 def jac(params, nelectron, S, H1, v2, Wg, Rg):
@@ -252,8 +371,9 @@ def jac(params, nelectron, S, H1, v2, Wg, Rg):
     #wavefunction
     nso = S.shape[0]
     Phi = paramVec.reshape((nso, nelectron))
-    J = calcGradient(S, H1, v2, Phi, Wg, Rg)
-    return J.flatten()
+    #calc energy and gradient
+    E, G = calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg)
+    return G
 
 class DIIS(object):
     counter = 0 #diis does sgd for the first nVec iterations
@@ -336,7 +456,7 @@ def pGHF(mol, mo_coeff):
     orbs = mo_coeff + 1j * np.zeros(mo_coeff.shape, dtype = float)
 
     #Sz symmetry projector
-    nGrid = 12
+    nGrid = 7
     Wg, Rg = calcSzSymmetryProjector(nso, sz, nGrid)
 
     #wavefunction
@@ -350,21 +470,22 @@ def pGHF(mol, mo_coeff):
     doPrint = True
     calcStart = time.time()
     diis = DIIS(2 * nso * ne, (2 * nso * ne, ), 6)
-    for m in range(50):
+    for m in range(100):
         iterStart = time.time()
 
         #energy
         #E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
+        #print(E)
 
         #gradient
         E, G = calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg)
-        Efd, Gfd = calcEnergyAndGradientFiniteDifference(S, H1, v2, Phi, Wg, Rg)
-        print("G")
-        print(E)
-        print(G.T)
-        print("G fin-diff")
-        print(Efd)
-        print(Gfd.T)
+        #Efd, Gfd = calcEnergyAndGradientFiniteDifference(S, H1, v2, Phi, Wg, Rg)
+        #print("G")
+        #print(E)
+        #print(G.T)
+        #print("G fin-diff")
+        #print(Efd)
+        #print(Gfd.T)
 
         #total energy
         E0 = E + mol.energy_nuc()
@@ -374,16 +495,15 @@ def pGHF(mol, mo_coeff):
         #calculate update
         params = complex_to_real(Phi.flatten())
         #params = params - 1.0 * G
-        params = diis.update(G, params)
-        #scipy optimizer
-        #params = complex_to_real(Phi.flatten())
-        #params = params - dt * Jvec
+        #params = diis.update(G, params)
 
-        #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'SLSQP', jac = jac, tol = tol)
+        #scipy optimizer
+        sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'SLSQP', jac = jac, tol = Etol)
         #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'L-BFGS-B', jac = jac, tol = tol)
 
         #update parameters
-        Phi = real_to_complex(params).reshape((nso, ne))
+        Phi = real_to_complex(sol.x).reshape((nso, ne))
+        #Phi = real_to_complex(params).reshape((nso, ne))
         #if sol.success == True:
         #    Phi = real_to_complex(sol.x).reshape((nso, ne))
         #else:
@@ -407,15 +527,12 @@ def pGHF(mol, mo_coeff):
             print(f"  Energy Error: {Eerror}")
             print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
 
-            #print("Scipy Optimizer")
-            #print(f"  message: {sol.message}")
-            #print(f"  fun: {sol.fun}")
-            #print(f"  jac: {lalg.norm(sol.jac)}")
-            #print(f"  nit: {sol.nit}")
-            #print(f"  Time for Optimizer: {timeOptimizer - timeEnergyGradient}")
-
-            #print("Occupied Orbitals")
-            #print(Phi)
+            print("Scipy Optimizer")
+            print(f"  message: {sol.message}")
+            print(f"  fun: {sol.fun}")
+            print(f"  jac: {lalg.norm(sol.jac)}")
+            print(f"  nit: {sol.nit}")
+            print(f"  Time for Optimizer: {timeOptimizer - timeEnergyGradient}")
 
         #check for convergence
         if Eerror < Etol or Gerror < Gtol:
@@ -450,7 +567,7 @@ def readMat(filename, shape, iscomplex):
      mat = matr + 1j * mati
    return mat
 
-np.set_printoptions(precision=1)
+np.set_printoptions(precision=2)
 np.set_printoptions(suppress=False)
 
 N = 4
