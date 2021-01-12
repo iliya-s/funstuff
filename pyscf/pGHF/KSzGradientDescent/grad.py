@@ -70,10 +70,7 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
         #averages with symmetry weights
         D += Wg[i] * detO
         N += Wg[i] * detO * H
-        #print(f'D: {detO}')
-        #print(f'N: {detO * H}')
 
-    #print("\n")
     #2
     for i in range(len(Wg)):
         #overlap quantities
@@ -92,10 +89,7 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
         #averages with symmetry weights
         D += Wg[i] * detO
         N += Wg[i] * detO * H
-        #print(f'D: {detO}')
-        #print(f'N: {detO * H}')
 
-    #print("\n")
     #3
     for i in range(len(Wg)):
         #overlap quantities
@@ -114,10 +108,7 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
         #averages with symmetry weights
         D += Wg[i] * detO
         N += Wg[i] * detO * H
-        #print(f'D: {detO}')
-        #print(f'N: {detO * H}')
 
-    #print("\n")
     #4
     for i in range(len(Wg)):
         #overlap quantities
@@ -136,10 +127,7 @@ def calcEnergy(S, H1, v2, Phi, Wg, Rg):
         #averages with symmetry weights
         D += Wg[i] * detO
         N += Wg[i] * detO * H
-        #print(f'D: {detO}')
-        #print(f'N: {detO * H}')
 
-    #print("\n")
     E = N / D
     return np.real(E)
 
@@ -344,7 +332,6 @@ def calcEnergyAndGradientFiniteDifference(S, H1, v2, Phi, Wg, Rg):
 
             Ji[a, b] = (E - E0) / ds
 
-    #return E0, np.concatenate((Jr, Ji), axis = 0)
     J_vec = np.concatenate((Jr.flatten(), Ji.flatten()), axis = 0)
     return E0, J_vec
 
@@ -364,7 +351,7 @@ def fun(params, nelectron, S, H1, v2, Wg, Rg):
     Phi = paramVec.reshape((nso, nelectron))
     #calc energy
     E = calcEnergy(S, H1, v2, Phi, Wg, Rg)
-    return calcEnergy(S, H1, v2, Phi, Wg, Rg)
+    return E
 
 def jac(params, nelectron, S, H1, v2, Wg, Rg):
     paramVec = real_to_complex(params)
@@ -375,64 +362,6 @@ def jac(params, nelectron, S, H1, v2, Wg, Rg):
     E, G = calcEnergyAndGradient(S, H1, v2, Phi, Wg, Rg)
     return G
 
-class DIIS(object):
-    counter = 0 #diis does sgd for the first nVec iterations
-    nVec = 6
-
-    sizeVector = None
-    errorVectors = None
-
-    shapeObject = None
-    averagedObjects = None
-
-    def __init__(self, sizeVector, shapeObject, nVec = 6):
-        self.sizeVector = sizeVector
-        self.errorVectors = []
-
-        self.shapeObject = shapeObject
-        self.averagedObjects = []
-
-        self.nVec = nVec
-        for i in range(nVec):
-            errorVec = np.zeros((sizeVector, 1), dtype = float)
-            self.errorVectors.append(errorVec)
-
-            averagedObject = np.zeros(shapeObject, dtype = float)
-            self.averagedObjects.append(averagedObject)
-
-    def restart(self):
-        self.counter = 0
-
-    def update(self, errVec, avgObj):
-        self.counter += 1
-        self.errorVectors.pop(0)
-        self.errorVectors.append(errVec)
-        self.averagedObjects.pop(0)
-        self.averagedObjects.append(avgObj)
-
-        returnObj = np.zeros(self.shapeObject, dtype = float)
-        if self.counter < self.nVec:
-            returnObj = avgObj - errVec
-        else:
-            b = np.zeros((self.nVec + 1, 1), dtype = float)
-            b[self.nVec] = - 1.0
-
-            Bmat = np.zeros((self.nVec + 1, self.nVec + 1), dtype = float)
-            for i in range(self.nVec):
-                Bmat[self.nVec, i] = - 1.0
-                Bmat[i, self.nVec] = - 1.0
-            for i in range(self.nVec):
-                for j in range(self.nVec):
-                    Bmat[i, j] = self.errorVectors[i].conj().T.dot(self.errorVectors[j])
-
-            #w  = lalg.solve(Bmat, b)
-            w = lalg.lstsq(Bmat, b)[0]
-
-            w = w[0:self.nVec]
-            for i in range(self.nVec):
-                returnObj += w[i] * self.averagedObjects[i]
-
-        return returnObj
 
 def pGHF(mol, mo_coeff):
     #basic molecule info and integrals
@@ -461,16 +390,14 @@ def pGHF(mol, mo_coeff):
 
     #wavefunction
     Phi = orbs[:, 0:ne]
-    Phi += 1j * 0.01 * np.random.randn(Phi.shape[0], Phi.shape[1])
-    Phi += 0.01 * np.random.randn(Phi.shape[0], Phi.shape[1])
+    #noise helps optimization
+    Phi += 1j * 0.01 * (np.random.rand(Phi.shape[0], Phi.shape[1]) - 0.5)
 
     Eold = 100
     Etol = 1.e-8
-    Gtol = 1.e-6
     doPrint = True
     calcStart = time.time()
-    diis = DIIS(2 * nso * ne, (2 * nso * ne, ), 6)
-    for m in range(100):
+    for m in range(50):
         iterStart = time.time()
 
         #energy
@@ -493,28 +420,20 @@ def pGHF(mol, mo_coeff):
         timeEnergyGradient = time.time()
 
         #calculate update
-        params = complex_to_real(Phi.flatten())
-        #params = params - 1.0 * G
-        #params = diis.update(G, params)
 
         #scipy optimizer
+        params = complex_to_real(Phi.flatten())
         sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'SLSQP', jac = jac, tol = Etol)
         #sol = opt.minimize(fun, params, args = (ne, S, H1, v2, Wg, Rg), method = 'L-BFGS-B', jac = jac, tol = tol)
 
         #update parameters
         Phi = real_to_complex(sol.x).reshape((nso, ne))
-        #Phi = real_to_complex(params).reshape((nso, ne))
-        #if sol.success == True:
-        #    Phi = real_to_complex(sol.x).reshape((nso, ne))
-        #else:
-        #    Phi = real_to_complex(params - dt * Jvec).reshape((nso, ne))
 
         timeOptimizer = time.time()
 
         #update error
         Eerror = abs(E - Eold)
         Eold = E
-        Gerror = lalg.norm(G)
 
         #print
         if doPrint == True:
@@ -523,7 +442,7 @@ def pGHF(mol, mo_coeff):
             print("Projected values")
             print(f"  Electronic Energy: {E}")
             print(f"  Total Energy: {E0}")
-            print(f"  Gradient Norm: {Gerror}")
+            print(f"  Gradient Norm: {lalg.norm(G)}")
             print(f"  Energy Error: {Eerror}")
             print(f"  Time for Energy and Gradient: {timeEnergyGradient - iterStart}")
 
@@ -535,7 +454,7 @@ def pGHF(mol, mo_coeff):
             print(f"  Time for Optimizer: {timeOptimizer - timeEnergyGradient}")
 
         #check for convergence
-        if Eerror < Etol or Gerror < Gtol:
+        if Eerror < Etol:
             break
 
     if doPrint == True:
@@ -543,29 +462,6 @@ def pGHF(mol, mo_coeff):
         print(f"  Total Time: {time.time() - calcStart}")
         print(f"  Total Energy: {E0}")
     return E0, Phi
-
-def readMat(filename, shape, iscomplex):
-   if(iscomplex):
-     matr = np.zeros(shape)
-     mati = np.zeros(shape)
-   else:
-     mat = np.zeros(shape)
-   row = 0
-   fileh = open(filename, 'r')
-   for line in fileh:
-     col = 0
-     for coeff in line.split():
-       if (iscomplex):
-         m = coeff.strip()[1:-1]
-         matr[row, col], mati[row, col] = [float(x) for x in m.split(',')]
-       else:
-         mat[row, col]  = float(coeff)
-       col = col + 1
-     row = row + 1
-   fileh.close()
-   if (iscomplex):
-     mat = matr + 1j * mati
-   return mat
 
 np.set_printoptions(precision=2)
 np.set_printoptions(suppress=False)
@@ -598,24 +494,11 @@ dm = dm + np.random.rand(2 * norb, 2 * norb) / 100
 mf.max_cycle = 100
 mf.kernel(dm0 = dm)
 
-S = mf.get_ovlp()
-occidx = mf.mo_occ > 0
-occOrb = mf.mo_coeff[:, occidx]
-#print(occOrb)
-fock = mf.get_hcore() + mf.get_veff()
-#print(fock)
-
-print("\ninitial solution")
-#print(mf.mo_coeff)
 E0, mo = pGHF(mol, mf.mo_coeff)
-
-#print("\nkszghf solution")
-#mo_coeff = readMat("hf.txt", S.shape, True)
-#print(mo_coeff)
-#E0, mo = pGHF(mol, mo_coeff)
 
 #print("\n")
 #print("Final Result")
 #print("Energy")
 #print(E0)
 #print("Molecular Orbitals")
+#print(mo)
