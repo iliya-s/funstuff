@@ -397,7 +397,7 @@ def pGHF(mol, mo_coeff):
     Etol = 1.e-8
     doPrint = True
     calcStart = time.time()
-    for m in range(50):
+    for m in range(20):
         iterStart = time.time()
 
         #energy
@@ -498,7 +498,7 @@ E0, mo = pGHF(mol, mf.mo_coeff)
 
 #print("\n")
 #print("Final Result")
-#print("Energy")
+#print("\nEnergy")
 #print(E0)
-#print("Molecular Orbitals")
+#print("\nMolecular Orbitals")
 #print(mo)

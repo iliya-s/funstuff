@@ -393,13 +393,12 @@ def pGHF(mol, mo_coeff):
     Phi = orbs[:, 0:ne]
     #noise helps optimization
     Phi += 1j * 0.01 * (np.random.rand(Phi.shape[0], Phi.shape[1]) - 0.5)
-    print(np.random.rand(Phi.shape[0], Phi.shape[1]) - 0.5)
 
     Eold = 100
     Etol = 1.e-8
     doPrint = True
     calcStart = time.time()
-    for m in range(50):
+    for m in range(20):
         iterStart = time.time()
 
         #energy
@@ -511,7 +510,7 @@ System: uname_result(system='Linux', node='ubuntu', release='5.4.0-58-generic', 
 Python 3.8.3 (default, May 19 2020, 18:47:26) 
 [GCC 7.3.0]
 numpy 1.19.4  scipy 1.4.1
-Date: Tue Jan 12 12:10:33 2021
+Date: Wed Jan 13 15:35:01 2021
 PySCF version 1.7.5
 PySCF path  /home/iliya/miniconda3/lib/python3.8/site-packages/pyscf
 
@@ -534,7 +533,7 @@ number of NR pGTOs = 12
 number of NR cGTOs = 4
 basis = sto-3g
 ecp = {}
-CPU time:         0.35
+CPU time:         0.38
 
 
 ******** <class 'pyscf.scf.ghf.GHF'> ********
@@ -550,90 +549,80 @@ SCF conv_tol_grad = None
 SCF max_cycles = 100
 direct_scf = True
 direct_scf_tol = 1e-13
-chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/KSzGradientDescent/tmp4j7cykjp
+chkfile to save SCF result = /home/iliya/Desktop/projects/funstuff/pyscf/pGHF/KSzGradientDescent/tmpbyg0u89q
 max_memory 4000 MB (current use 76 MB)
 Set gradient conv threshold to 3.16228e-05
-init E= -1.92758396436418
-  HOMO = -0.220373902794273  LUMO = 0.446376987367069
-cycle= 1 E= -2.09465139779336  delta_E= -0.167  |g|= 0.0792  |ddm|= 1.03
-  HOMO = -0.426415310062394  LUMO = 0.48347374884315
-cycle= 2 E= -2.09828229017586  delta_E= -0.00363  |g|= 0.0109  |ddm|= 0.149
-  HOMO = -0.425052677813581  LUMO = 0.492125544082537
-cycle= 3 E= -2.09837549652745  delta_E= -9.32e-05  |g|= 0.00274  |ddm|= 0.0184
-  HOMO = -0.426006581332237  LUMO = 0.493060458000332
-cycle= 4 E= -2.0983821906516  delta_E= -6.69e-06  |g|= 0.000252  |ddm|= 0.00597
-  HOMO = -0.426042944392781  LUMO = 0.493058999542908
-cycle= 5 E= -2.09838237765534  delta_E= -1.87e-07  |g|= 8.67e-05  |ddm|= 0.0013
-  HOMO = -0.426046705152147  LUMO = 0.49307138230731
-cycle= 6 E= -2.09838240499138  delta_E= -2.73e-08  |g|= 1.84e-05  |ddm|= 0.000601
-  HOMO = -0.426050754496973  LUMO = 0.493064181469579
-cycle= 7 E= -2.09838240612892  delta_E= -1.14e-09  |g|= 9.85e-07  |ddm|= 0.000144
-  HOMO = -0.426050551766272  LUMO = 0.493065469379934
-cycle= 8 E= -2.09838240612979  delta_E= -8.7e-13  |g|= 7.16e-08  |ddm|= 2.89e-06
-  HOMO = -0.426050618856653  LUMO = 0.493065312493591
-Extra cycle  E= -2.0983824061298  delta_E= -4.44e-15  |g|= 1.86e-08  |ddm|= 1.04e-07
-converged SCF energy = -2.0983824061298  <S^2> = 6.9944051e-15  2S+1 = 1
-[[ 0.43  0.02 -0.3   0.19]
- [ 0.46 -0.25  0.33 -0.05]
- [ 0.43 -0.48  0.11  0.06]
- [ 0.25 -0.29 -0.12 -0.25]
- [-0.1   0.31  0.22 -0.27]
- [ 0.32  0.28 -0.14 -0.03]
- [ 0.26  0.48 -0.07  0.31]
- [ 0.4  -0.35  0.12 -0.02]]
+init E= -1.92670553401461
+  HOMO = -0.217338088682103  LUMO = 0.441082905945556
+cycle= 1 E= -2.09457096909541  delta_E= -0.168  |g|= 0.08  |ddm|= 1.03
+  HOMO = -0.426344746561104  LUMO = 0.483121813757868
+cycle= 2 E= -2.09827928555002  delta_E= -0.00371  |g|= 0.0111  |ddm|= 0.151
+  HOMO = -0.424939106207151  LUMO = 0.492033380826209
+cycle= 3 E= -2.09837478837538  delta_E= -9.55e-05  |g|= 0.00284  |ddm|= 0.0186
+  HOMO = -0.425952931447095  LUMO = 0.493053908095884
+cycle= 4 E= -2.09838211685164  delta_E= -7.33e-06  |g|= 0.000346  |ddm|= 0.0062
+  HOMO = -0.426046718460114  LUMO = 0.49305968792017
+cycle= 5 E= -2.09838237076983  delta_E= -2.54e-07  |g|= 9.53e-05  |ddm|= 0.00136
+  HOMO = -0.42604697067974  LUMO = 0.493071950324239
+cycle= 6 E= -2.09838240600569  delta_E= -3.52e-08  |g|= 7.3e-06  |ddm|= 0.000795
+  HOMO = -0.426050682799212  LUMO = 0.493064142686059
+cycle= 7 E= -2.09838240612919  delta_E= -1.24e-10  |g|= 7.16e-07  |ddm|= 4.31e-05
+  HOMO = -0.426050534729767  LUMO = 0.493065298729557
+Extra cycle  E= -2.09838240612963  delta_E= -4.39e-13  |g|= 2.29e-07  |ddm|= 1.18e-06
+converged SCF energy = -2.09838240612963  <S^2> = 1.3413715e-12  2S+1 = 1
 -------------------------------- 0 --------------------------------
 Projected values
-  Electronic Energy: -5.193620832234999
-  Total Energy: -2.098382736996904
-  Gradient Norm: 0.0012583319750294406
-  Energy Error: 105.193620832235
-  Time for Energy and Gradient: 0.10808463697321713
+  Electronic Energy: -5.19361930760042
+  Total Energy: -2.0983812123623244
+  Gradient Norm: 0.0007546549122994508
+  Energy Error: 105.19361930760041
+  Time for Energy and Gradient: 0.12032319896388799
 Scipy Optimizer
   message: Iteration limit exceeded
-  fun: -5.233600553058547
-  jac: 0.00024468796711914296
+  fun: -5.233596137302974
+  jac: 0.0014973302246334952
   nit: 101
-  Time for Optimizer: 10.250244011054747
+  Time for Optimizer: 10.198507452034391
 -------------------------------- 1 --------------------------------
 Projected values
-  Electronic Energy: -5.233600553058547
-  Total Energy: -2.138362457820452
-  Gradient Norm: 0.00024468796711914296
-  Energy Error: 0.03997972082354817
-  Time for Energy and Gradient: 0.0790600529871881
+  Electronic Energy: -5.233596137302974
+  Total Energy: -2.1383580420648785
+  Gradient Norm: 0.0014973302246334952
+  Energy Error: 0.039976829702554006
+  Time for Energy and Gradient: 0.08144701004493982
 Scipy Optimizer
   message: Optimization terminated successfully.
-  fun: -5.233600585447941
-  jac: 0.0002091271220641986
-  nit: 2
-  Time for Optimizer: 0.2255488559603691
+  fun: -5.233600731423437
+  jac: 7.460007856215617e-05
+  nit: 24
+  Time for Optimizer: 2.4114910589996725
 -------------------------------- 2 --------------------------------
 Projected values
-  Electronic Energy: -5.233600585447941
-  Total Energy: -2.1383624902098455
-  Gradient Norm: 0.00025772922445107616
-  Energy Error: 3.23893933895647e-08
-  Time for Energy and Gradient: 0.07736754301004112
+  Electronic Energy: -5.233600731423437
+  Total Energy: -2.138362636185342
+  Gradient Norm: 6.0360403086453645e-05
+  Energy Error: 4.594120463607965e-06
+  Time for Energy and Gradient: 0.07769235200248659
 Scipy Optimizer
   message: Optimization terminated successfully.
-  fun: -5.233600591746163
-  jac: 0.00025772922445107616
+  fun: -5.233600731423437
+  jac: 6.0360403086453645e-05
   nit: 1
-  Time for Optimizer: 0.14411246101371944
+  Time for Optimizer: 0.10344740003347397
 -------------------------------- 3 --------------------------------
 Projected values
-  Electronic Energy: -5.233600591746163
-  Total Energy: -2.138362496508068
-  Gradient Norm: 9.709964641084389e-05
-  Energy Error: 6.298222388068098e-09
-  Time for Energy and Gradient: 0.07630071300081909
+  Electronic Energy: -5.233600731423437
+  Total Energy: -2.138362636185342
+  Gradient Norm: 6.0360403086453645e-05
+  Energy Error: 0.0
+  Time for Energy and Gradient: 0.07859975192695856
 Scipy Optimizer
   message: Optimization terminated successfully.
-  fun: -5.233600591746163
-  jac: 9.709964641084389e-05
+  fun: -5.233600731423437
+  jac: 6.0360403086453645e-05
   nit: 1
-  Time for Optimizer: 0.09769382607191801
+  Time for Optimizer: 0.09781604504678398
 
 Calculation Complete
-  Total Time: 11.05870659998618
-  Total Energy: -2.138362496508068
+  Total Time: 13.169609499978833
+  Total Energy: -2.138362636185342
